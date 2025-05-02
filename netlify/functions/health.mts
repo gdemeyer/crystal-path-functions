@@ -1,5 +1,9 @@
 import type { Context } from "@netlify/functions";
 
 export default async (req: Request, context: Context) => {
-    return new Response("hello");
+    return new Response("hello", {
+        headers: {
+            'Access-Control-Allow-Origin': '*',
+        }
+    });
 }
