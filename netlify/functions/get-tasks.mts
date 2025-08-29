@@ -1,4 +1,7 @@
 import type { Context } from "@netlify/functions";
+import { Db, MongoClient } from "mongodb";
+
+let cachedDb: Db
 
 export default async (req: Request, context: Context) => {
     console.log(req)
@@ -13,8 +16,19 @@ export default async (req: Request, context: Context) => {
             },
         });
     }
+
+    if (cachedDb) {
+      return cachedDb;
+    }
+
+    const client = await MongoClient.connect(process.env.MONGODB_CONNECTION_STRING ?? "");
+
+    const db = client.db('CrystalPath'); // Replace with your database name
+    cachedDb = db;
+    const collection = db.collection('Tasks');
+    const tasks = await collection.find({}).toArray();
     
-    return new Response(JSON.stringify({message: "hello"}), {
+    return new Response(JSON.stringify(tasks), {
         headers: {
             'Access-Control-Allow-Origin': '*',
             "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
