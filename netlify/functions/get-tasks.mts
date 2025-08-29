@@ -21,19 +21,24 @@ export default async (req: Request, context: Context) => {
       return cachedDb;
     }
 
-    const client = await MongoClient.connect(process.env.MONGODB_CONNECTION_STRING ?? "");
+    try {
+      const client = await MongoClient.connect(process.env.MONGODB_CONNECTION_STRING ?? "");
 
-    const db = client.db('CrystalPath'); // Replace with your database name
-    cachedDb = db;
-    const collection = db.collection('Tasks');
-    const tasks = await collection.find({}).toArray();
-    
-    return new Response(JSON.stringify(tasks), {
-        headers: {
-            'Access-Control-Allow-Origin': '*',
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization",
-            "Access-Control-Max-Age": "86400", // 24 hours
-        }
-    });
+      const db = client.db('CrystalPath'); // Replace with your database name
+      cachedDb = db;
+      const collection = db.collection('Tasks');
+      const tasks = await collection.find({}).toArray();
+      
+      return new Response(JSON.stringify(tasks), {
+          headers: {
+              'Access-Control-Allow-Origin': '*',
+              "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+              "Access-Control-Allow-Headers": "Content-Type, Authorization",
+              "Access-Control-Max-Age": "86400", // 24 hours
+          }
+      });
+    } catch (error) {
+      console.log(error)
+      return new Response("Server Error", { status: 500 })
+    }
 }
