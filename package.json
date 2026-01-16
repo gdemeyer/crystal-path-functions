@@ -2,9 +2,11 @@
   "name": "crystal-path-functions",
   "version": "1.0.0",
   "description": "",
+  "type": "module",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "",
@@ -13,5 +15,11 @@
     "@netlify/functions": "^3.1.2",
     "dotenv": "^17.2.1",
     "mongodb": "^6.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vitest/ui": "^4.0.15",
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.15"
   }
 }

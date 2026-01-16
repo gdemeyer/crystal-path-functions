@@ -18,6 +18,17 @@ export default async (req: Request, context: Context) => {
         });
     }
 
+    // Only accept GET requests
+    if (req.method !== "GET") {
+      return new Response(JSON.stringify({ error: "Method not allowed" }), {
+        status: 405,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        }
+      })
+    }
+
     try {
       const client = await MongoClient.connect(process.env.MONGODB_CONNECTION_STRING ?? "");
       if (cachedDb === undefined) {
@@ -29,7 +40,9 @@ export default async (req: Request, context: Context) => {
       const tasks = await collection.find({}).toArray();
       console.log(tasks)
       return new Response(JSON.stringify(tasks), {
+          status: 200,
           headers: {
+              'Content-Type': 'application/json',
               'Access-Control-Allow-Origin': '*',
               "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
               "Access-Control-Allow-Headers": "Content-Type, Authorization",
@@ -38,6 +51,12 @@ export default async (req: Request, context: Context) => {
       });
     } catch (error) {
       console.log(error)
-      return new Response("Server Error", { status: 500 })
+      return new Response(JSON.stringify({ error: "Server error" }), { 
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        }
+      })
     }
 }

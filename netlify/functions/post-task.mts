@@ -2,6 +2,7 @@ import type { Context } from '@netlify/functions'
 import { Db, MongoClient } from 'mongodb'
 import { MONGODB_DB_NAME, MONGODB_TASK_COLLECTION_NAME } from '../../consts'
 import { isTask } from '../types'
+import { calculateScore } from '../utils/scoring'
 
 let cachedDb: Db
 
@@ -19,13 +20,46 @@ export default async (req: Request, context: Context) => {
       });
   }
 
-  const taskToInsert = await req.json()
+  // Only accept POST requests
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json',
+      }
+    })
+  }
+
+  let taskToInsert
+  try {
+    taskToInsert = await req.json()
+  } catch (error) {
+    return new Response(JSON.stringify({ error: "Invalid JSON in request body" }), {
+      status: 400,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json',
+      }
+    })
+  }
 
   console.log(taskToInsert)
 
   if (!isTask(taskToInsert)) {
     console.log('request does not match Task interface')
-    return new Response("Server Error")
+    return new Response(JSON.stringify({ error: "Invalid task data" }), {
+      status: 400,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json',
+      }
+    })
+  }
+
+  const taskWithScore = {
+    ...taskToInsert,
+    score: calculateScore(taskToInsert)
   }
 
   try {
@@ -37,10 +71,12 @@ export default async (req: Request, context: Context) => {
     }
 
     const collection = cachedDb.collection(MONGODB_TASK_COLLECTION_NAME)
-    const taskInserted = await collection.insertOne(taskToInsert)
+    const result = await collection.insertOne(taskWithScore)
     
-    return new Response(JSON.stringify(taskInserted), {
+    return new Response(JSON.stringify({ ...taskWithScore, _id: result.insertedId }), {
+        status: 201,
         headers: {
+            'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*',
             "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
             "Access-Control-Allow-Headers": "Content-Type, Authorization",
@@ -49,6 +85,12 @@ export default async (req: Request, context: Context) => {
     })
   } catch (error) {
     console.log(error)
-    return new Response("Server Error", { status: 500 })
+    return new Response(JSON.stringify({ error: "Server error" }), { 
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      }
+    })
   }
 }
