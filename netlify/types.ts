@@ -5,6 +5,10 @@ export interface Task {
     time: number;
     urgency: number;
     score?: number;
+    userId?: string;
+    _id?: string;
+    status?: string;
+    statusChanged?: number;
 }
 
 export function isTask(obj: any): obj is Task {

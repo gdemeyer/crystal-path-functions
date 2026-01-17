@@ -1,8 +1,10 @@
 import type { Context } from '@netlify/functions'
 import { Db, MongoClient } from 'mongodb'
 import { MONGODB_DB_NAME, MONGODB_TASK_COLLECTION_NAME } from '../../consts'
+import { TASK_STATUS } from '../../consts-status'
 import { isTask } from '../types'
 import { calculateScore } from '../utils/scoring'
+import { validateToken } from '../utils/auth'
 
 let cachedDb: Db
 
@@ -24,6 +26,21 @@ export default async (req: Request, context: Context) => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json',
+      }
+    })
+  }
+
+  // Validate authentication
+  let userId: string
+  try {
+    userId = await validateToken(req.headers.get('Authorization') ?? undefined)
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unauthorized"
+    return new Response(JSON.stringify({ error: errorMessage }), {
+      status: 401,
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Content-Type': 'application/json',
@@ -59,7 +76,10 @@ export default async (req: Request, context: Context) => {
 
   const taskWithScore = {
     ...taskToInsert,
-    score: calculateScore(taskToInsert)
+    score: calculateScore(taskToInsert),
+    userId: userId,
+    status: TASK_STATUS.NOT_STARTED,
+    statusChanged: Date.now()
   }
 
   try {

@@ -1,6 +1,8 @@
 import type { Context } from "@netlify/functions";
 import { Db, MongoClient } from "mongodb";
 import { MONGODB_DB_NAME, MONGODB_TASK_COLLECTION_NAME } from "../../consts";
+import { TASK_STATUS } from "../../consts-status";
+import { validateToken } from "../utils/auth";
 
 let cachedDb: Db
 
@@ -29,6 +31,21 @@ export default async (req: Request, context: Context) => {
       })
     }
 
+    // Validate authentication
+    let userId: string
+    try {
+      userId = await validateToken(req.headers.get('Authorization') ?? undefined)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unauthorized"
+      return new Response(JSON.stringify({ error: errorMessage }), {
+        status: 401,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'application/json',
+        }
+      })
+    }
+
     try {
       const client = await MongoClient.connect(process.env.MONGODB_CONNECTION_STRING ?? "");
       if (cachedDb === undefined) {
@@ -37,7 +54,11 @@ export default async (req: Request, context: Context) => {
       }
 
       const collection = cachedDb.collection(MONGODB_TASK_COLLECTION_NAME);
-      const tasks = await collection.find({}).toArray();
+      // Filter tasks by userId and exclude completed tasks
+      const tasks = await collection.find({ 
+        userId: userId,
+        status: { $ne: TASK_STATUS.COMPLETED }
+      }).toArray();
       console.log(tasks)
       return new Response(JSON.stringify(tasks), {
           status: 200,

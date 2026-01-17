@@ -5,6 +5,18 @@ import * as mongodb from 'mongodb'
 // Mock MongoDB module
 vi.mock('mongodb')
 
+// Mock token validation
+vi.mock('../utils/auth', () => ({
+  validateToken: vi.fn((token) => {
+    if (!token) throw new Error('Missing Authorization header')
+    if (!token.includes('Bearer')) throw new Error('Invalid Authorization header format')
+    if (token === 'Bearer dummy-token-test-user') return Promise.resolve('test-user')
+    if (token === 'Bearer dummy-token-user-123') return Promise.resolve('user-123')
+    if (token === 'Bearer invalid-token') return Promise.reject(new Error('Token verification failed: Invalid token'))
+    throw new Error('Invalid token')
+  })
+}))
+
 // Mock calculateScore utility
 vi.mock('../utils/scoring', () => ({
   calculateScore: vi.fn((task) => {
@@ -40,10 +52,116 @@ describe('POST /post-task handler', () => {
     MongoClientMock.connect = vi.fn().mockResolvedValue(mockClient)
   })
 
-  describe('Valid POST requests', () => {
-    it('should accept POST requests', async () => {
+  describe('Authentication', () => {
+    it('should reject requests without Authorization header', async () => {
       const request = new Request('http://localhost/', {
         method: 'POST',
+        body: JSON.stringify({
+          title: 'Test Task',
+          difficulty: 5,
+          impact: 8,
+          time: 3,
+          urgency: 13
+        })
+      })
+      const context = {}
+
+      const result = await handler(request, context as any)
+      expect(result.status).toBe(401)
+    })
+
+    it('should reject requests with invalid token', async () => {
+      const request = new Request('http://localhost/', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer invalid-token'
+        },
+        body: JSON.stringify({
+          title: 'Test Task',
+          difficulty: 5,
+          impact: 8,
+          time: 3,
+          urgency: 13
+        })
+      })
+      const context = {}
+
+      const result = await handler(request, context as any)
+      expect(result.status).toBe(401)
+    })
+
+    it('should accept requests with valid token', async () => {
+      const request = new Request('http://localhost/', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer dummy-token-test-user'
+        },
+        body: JSON.stringify({
+          title: 'Test Task',
+          difficulty: 5,
+          impact: 8,
+          time: 3,
+          urgency: 13
+        })
+      })
+      const context = {}
+
+      const result = await handler(request, context as any)
+      expect(result.status).toBe(201)
+    })
+
+    it('should include userId in saved task', async () => {
+      const request = new Request('http://localhost/', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        },
+        body: JSON.stringify({
+          title: 'Test Task',
+          difficulty: 5,
+          impact: 8,
+          time: 3,
+          urgency: 13
+        })
+      })
+      const context = {}
+
+      const result = await handler(request, context as any)
+      const body = await result.json()
+      
+      expect(body.userId).toBe('user-123')
+    })
+
+    it('should include malformed Authorization header error', async () => {
+      const request = new Request('http://localhost/', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'InvalidHeader'
+        },
+        body: JSON.stringify({
+          title: 'Test Task',
+          difficulty: 5,
+          impact: 8,
+          time: 3,
+          urgency: 13
+        })
+      })
+      const context = {}
+
+      const result = await handler(request, context as any)
+      expect(result.status).toBe(401)
+      const body = await result.json()
+      expect(body.error).toBeDefined()
+    })
+  })
+
+  describe('Valid POST requests', () => {
+    it('should accept POST requests with valid auth', async () => {
+      const request = new Request('http://localhost/', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer dummy-token-test-user'
+        },
         body: JSON.stringify({
           title: 'Test Task',
           difficulty: 5,
@@ -61,6 +179,9 @@ describe('POST /post-task handler', () => {
     it('should calculate score for valid task', async () => {
       const request = new Request('http://localhost/', {
         method: 'POST',
+        headers: {
+          'Authorization': 'Bearer dummy-token-test-user'
+        },
         body: JSON.stringify({
           title: 'Test Task',
           difficulty: 5,
@@ -90,6 +211,9 @@ describe('POST /post-task handler', () => {
 
       const request = new Request('http://localhost/', {
         method: 'POST',
+        headers: {
+          'Authorization': 'Bearer dummy-token-test-user'
+        },
         body: JSON.stringify(taskData)
       })
       const context = {}
@@ -107,6 +231,9 @@ describe('POST /post-task handler', () => {
     it('should include _id from MongoDB insert', async () => {
       const request = new Request('http://localhost/', {
         method: 'POST',
+        headers: {
+          'Authorization': 'Bearer dummy-token-test-user'
+        },
         body: JSON.stringify({
           title: 'Test Task',
           difficulty: 5,
@@ -126,6 +253,9 @@ describe('POST /post-task handler', () => {
     it('should include CORS headers in response', async () => {
       const request = new Request('http://localhost/', {
         method: 'POST',
+        headers: {
+          'Authorization': 'Bearer dummy-token-test-user'
+        },
         body: JSON.stringify({
           title: 'Test Task',
           difficulty: 5,
@@ -147,6 +277,9 @@ describe('POST /post-task handler', () => {
     it('should reject requests with invalid task data', async () => {
       const request = new Request('http://localhost/', {
         method: 'POST',
+        headers: {
+          'Authorization': 'Bearer dummy-token-test-user'
+        },
         body: JSON.stringify({
           title: 'Incomplete Task'
           // Missing required fields
@@ -160,7 +293,10 @@ describe('POST /post-task handler', () => {
 
     it('should reject requests without body', async () => {
       const request = new Request('http://localhost/', {
-        method: 'POST'
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer dummy-token-test-user'
+        }
       })
       const context = {}
 
@@ -171,6 +307,9 @@ describe('POST /post-task handler', () => {
     it('should reject malformed JSON', async () => {
       const request = new Request('http://localhost/', {
         method: 'POST',
+        headers: {
+          'Authorization': 'Bearer dummy-token-test-user'
+        },
         body: '{ invalid json }'
       })
       const context = {}
@@ -184,6 +323,9 @@ describe('POST /post-task handler', () => {
     it('should connect to MongoDB using connection string', async () => {
       const request = new Request('http://localhost/', {
         method: 'POST',
+        headers: {
+          'Authorization': 'Bearer dummy-token-test-user'
+        },
         body: JSON.stringify({
           title: 'Test Task',
           difficulty: 5,
@@ -203,6 +345,9 @@ describe('POST /post-task handler', () => {
     it('should query correct database', async () => {
       const request = new Request('http://localhost/', {
         method: 'POST',
+        headers: {
+          'Authorization': 'Bearer dummy-token-test-user'
+        },
         body: JSON.stringify({
           title: 'Test Task',
           difficulty: 5,
@@ -224,6 +369,9 @@ describe('POST /post-task handler', () => {
     it('should insert into tasks collection', async () => {
       const request = new Request('http://localhost/', {
         method: 'POST',
+        headers: {
+          'Authorization': 'Bearer dummy-token-test-user'
+        },
         body: JSON.stringify({
           title: 'Test Task',
           difficulty: 5,
@@ -248,6 +396,9 @@ describe('POST /post-task handler', () => {
 
       const request = new Request('http://localhost/', {
         method: 'POST',
+        headers: {
+          'Authorization': 'Bearer dummy-token-test-user'
+        },
         body: JSON.stringify({
           title: 'Test Task',
           difficulty: 5,
@@ -292,7 +443,7 @@ describe('POST /post-task handler', () => {
       const context = {}
 
       const result = await handler(request, context as any)
-      expect([405, 400]).toContain(result.status)
+      expect([405, 400, 401]).toContain(result.status)
     })
   })
 
@@ -300,6 +451,9 @@ describe('POST /post-task handler', () => {
     it('should return valid JSON response', async () => {
       const request = new Request('http://localhost/', {
         method: 'POST',
+        headers: {
+          'Authorization': 'Bearer dummy-token-test-user'
+        },
         body: JSON.stringify({
           title: 'Test Task',
           difficulty: 5,
@@ -321,6 +475,9 @@ describe('POST /post-task handler', () => {
     it('should return correct HTTP headers', async () => {
       const request = new Request('http://localhost/', {
         method: 'POST',
+        headers: {
+          'Authorization': 'Bearer dummy-token-test-user'
+        },
         body: JSON.stringify({
           title: 'Test Task',
           difficulty: 5,

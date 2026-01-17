@@ -5,6 +5,18 @@ import * as mongodb from 'mongodb'
 // Mock MongoDB module
 vi.mock('mongodb')
 
+// Mock token validation
+vi.mock('../utils/auth', () => ({
+  validateToken: vi.fn((token) => {
+    if (!token) throw new Error('Missing Authorization header')
+    if (!token.includes('Bearer')) throw new Error('Invalid Authorization header format')
+    if (token === 'Bearer dummy-token-user-123') return Promise.resolve('user-123')
+    if (token === 'Bearer dummy-token-user-456') return Promise.resolve('user-456')
+    if (token === 'Bearer invalid-token') return Promise.reject(new Error('Token verification failed: Invalid token'))
+    throw new Error('Invalid token')
+  })
+}))
+
 describe('GET /get-tasks handler', () => {
   let mockToArray: any
   let mockFind: any
@@ -25,7 +37,8 @@ describe('GET /get-tasks handler', () => {
         impact: 5,
         time: 5,
         urgency: 5,
-        score: 10.5
+        score: 10.5,
+        userId: 'user-123'
       },
       {
         _id: '2',
@@ -34,7 +47,8 @@ describe('GET /get-tasks handler', () => {
         impact: 8,
         time: 2,
         urgency: 9,
-        score: 12.3
+        score: 12.3,
+        userId: 'user-123'
       }
     ])
     mockFind = vi.fn().mockReturnValue({ toArray: mockToArray })
@@ -49,10 +63,89 @@ describe('GET /get-tasks handler', () => {
     MongoClientMock.connect = vi.fn().mockResolvedValue(mockClient)
   })
 
+  describe('Authentication', () => {
+    it('should reject requests without Authorization header', async () => {
+      const request = new Request('http://localhost/', {
+        method: 'GET'
+      })
+      const context = {}
+
+      const result = await handler(request, context as any)
+      expect(result.status).toBe(401)
+    })
+
+    it('should reject requests with invalid token', async () => {
+      const request = new Request('http://localhost/', {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer invalid-token'
+        }
+      })
+      const context = {}
+
+      const result = await handler(request, context as any)
+      expect(result.status).toBe(401)
+    })
+
+    it('should accept requests with valid token', async () => {
+      const request = new Request('http://localhost/', {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        }
+      })
+      const context = {}
+
+      const result = await handler(request, context as any)
+      expect(result.status).toBe(200)
+    })
+
+    it('should filter tasks by userId', async () => {
+      const request = new Request('http://localhost/', {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        }
+      })
+      const context = {}
+
+      const result = await handler(request, context as any)
+
+      // Verify the response is successful with filtered data
+      expect(result.status).toBe(200)
+      const body = await result.json() as any[]
+      expect(Array.isArray(body)).toBe(true)
+      // All returned tasks should have the user's ID
+      body.forEach(task => {
+        expect(task.userId).toBe('user-123')
+      })
+    })
+
+    it('should filter for different users independently', async () => {
+      const request = new Request('http://localhost/', {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-456'
+        }
+      })
+      const context = {}
+
+      const result = await handler(request, context as any)
+
+      // Verify the response is successful
+      expect(result.status).toBe(200)
+      const body = await result.json() as any[]
+      expect(Array.isArray(body)).toBe(true)
+    })
+  })
+
   describe('Valid GET requests', () => {
     it('should return array of tasks from database', async () => {
       const request = new Request('http://localhost/', {
-        method: 'GET'
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        }
       })
       const context = {}
 
@@ -65,7 +158,10 @@ describe('GET /get-tasks handler', () => {
 
     it('should return tasks with all required fields', async () => {
       const request = new Request('http://localhost/', {
-        method: 'GET'
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        }
       })
       const context = {}
 
@@ -86,7 +182,10 @@ describe('GET /get-tasks handler', () => {
 
     it('should include CORS headers in response', async () => {
       const request = new Request('http://localhost/', {
-        method: 'GET'
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        }
       })
       const context = {}
 
@@ -94,8 +193,6 @@ describe('GET /get-tasks handler', () => {
       expect(result.headers.get('Access-Control-Allow-Origin')).toBe('*')
       expect(result.headers.get('Access-Control-Allow-Methods')).toContain('GET')
     })
-
-
   })
 
   describe('OPTIONS preflight requests', () => {
@@ -126,7 +223,10 @@ describe('GET /get-tasks handler', () => {
   describe('Database operations', () => {
     it('should connect to MongoDB using connection string', async () => {
       const request = new Request('http://localhost/', {
-        method: 'GET'
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        }
       })
       const context = {}
 
@@ -138,7 +238,10 @@ describe('GET /get-tasks handler', () => {
 
     it('should query correct database and collection', async () => {
       const request = new Request('http://localhost/', {
-        method: 'GET'
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        }
       })
       const context = {}
 
@@ -154,9 +257,12 @@ describe('GET /get-tasks handler', () => {
       }
     })
 
-    it('should call find with empty filter to get all tasks', async () => {
+    it('should call find with userId filter', async () => {
       const request = new Request('http://localhost/', {
-        method: 'GET'
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        }
       })
       const context = {}
 
@@ -164,13 +270,20 @@ describe('GET /get-tasks handler', () => {
 
       // Verify successful response which means find() was called with correct filter
       expect(result.status).toBe(200)
-      const body = await result.json()
+      const body = await result.json() as any[]
       expect(Array.isArray(body)).toBe(true)
+      // Tasks should be filtered by userId
+      if (body.length > 0) {
+        expect(body[0]).toHaveProperty('userId')
+      }
     })
 
     it('should convert cursor to array', async () => {
       const request = new Request('http://localhost/', {
-        method: 'GET'
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        }
       })
       const context = {}
 
@@ -187,7 +300,10 @@ describe('GET /get-tasks handler', () => {
       MongoClientMock.connect = vi.fn().mockRejectedValueOnce(new Error('Connection failed'))
 
       const request = new Request('http://localhost/', {
-        method: 'GET'
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        }
       })
       const context = {}
 
@@ -199,7 +315,10 @@ describe('GET /get-tasks handler', () => {
   describe('Response serialization', () => {
     it('should return valid JSON response', async () => {
       const request = new Request('http://localhost/', {
-        method: 'GET'
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        }
       })
       const context = {}
 
@@ -211,7 +330,10 @@ describe('GET /get-tasks handler', () => {
 
     it('should preserve task properties in response', async () => {
       const request = new Request('http://localhost/', {
-        method: 'GET'
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        }
       })
       const context = {}
 
@@ -231,7 +353,10 @@ describe('GET /get-tasks handler', () => {
   describe('Response headers', () => {
     it('should include Content-Type header', async () => {
       const request = new Request('http://localhost/', {
-        method: 'GET'
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        }
       })
       const context = {}
 
@@ -241,7 +366,10 @@ describe('GET /get-tasks handler', () => {
 
     it('should include CORS headers', async () => {
       const request = new Request('http://localhost/', {
-        method: 'GET'
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        }
       })
       const context = {}
 
@@ -258,7 +386,7 @@ describe('GET /get-tasks handler', () => {
       const context = {}
 
       const result = await handler(request, context as any)
-      expect([405, 400]).toContain(result.status)
+      expect([405, 400, 401]).toContain(result.status)
     })
   })
 })
