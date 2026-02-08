@@ -1,0 +1,4 @@
+*.spec.ts
+*.spec.mts
+*.test.ts
+*.test.mts

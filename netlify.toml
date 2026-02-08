@@ -1,7 +1,5 @@
 [functions]
   directory = "netlify/functions"
-  # Exclude test files from being deployed as functions
-  included_files = ["*.mts"]
 
 [[headers]]
     for = "/.netlify/functions/*"
