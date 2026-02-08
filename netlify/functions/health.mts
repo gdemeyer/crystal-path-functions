@@ -2,24 +2,15 @@ import type { Context } from "@netlify/functions";
 
 export default async (req: Request, context: Context) => {
     console.log(req)
+    
+    // Handle OPTIONS preflight request
     if (req.method === "OPTIONS") {
-        return new Response(null, {
-            status: 204,
-            headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization, Access-Control-Allow-Origin",
-            "Access-Control-Max-Age": "86400", // 24 hours
-            },
-        });
+        return new Response(null, { status: 204 });
     }
     
     return new Response(JSON.stringify({message: "hello"}), {
         headers: {
-            'Access-Control-Allow-Origin': '*',
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization",
-            "Access-Control-Max-Age": "86400", // 24 hours
+            'Content-Type': 'application/json',
         }
     });
 }

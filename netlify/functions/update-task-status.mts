@@ -8,24 +8,17 @@ let cachedDb: Db
 
 export default async (req: Request, context: Context) => {
   console.log(req)
+  
+  // Handle OPTIONS preflight request
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, Access-Control-Allow-Origin",
-        "Access-Control-Max-Age": "86400",
-      },
-    });
+    return new Response(null, { status: 204 });
   }
-
+  
   // Only accept PATCH requests
   if (req.method !== "PATCH") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
       headers: {
-        'Access-Control-Allow-Origin': '*',
         'Content-Type': 'application/json',
       }
     })
@@ -40,7 +33,6 @@ export default async (req: Request, context: Context) => {
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 401,
       headers: {
-        'Access-Control-Allow-Origin': '*',
         'Content-Type': 'application/json',
       }
     })
@@ -54,7 +46,6 @@ export default async (req: Request, context: Context) => {
     return new Response(JSON.stringify({ error: "Invalid JSON in request body" }), {
       status: 400,
       headers: {
-        'Access-Control-Allow-Origin': '*',
         'Content-Type': 'application/json',
       }
     })
@@ -67,7 +58,6 @@ export default async (req: Request, context: Context) => {
     return new Response(JSON.stringify({ error: "Missing taskId or status in request body" }), {
       status: 400,
       headers: {
-        'Access-Control-Allow-Origin': '*',
         'Content-Type': 'application/json',
       }
     })
@@ -77,7 +67,6 @@ export default async (req: Request, context: Context) => {
     return new Response(JSON.stringify({ error: "Invalid status value" }), {
       status: 400,
       headers: {
-        'Access-Control-Allow-Origin': '*',
         'Content-Type': 'application/json',
       }
     })
@@ -101,7 +90,6 @@ export default async (req: Request, context: Context) => {
       return new Response(JSON.stringify({ error: "Invalid task ID format" }), {
         status: 400,
         headers: {
-          'Access-Control-Allow-Origin': '*',
           'Content-Type': 'application/json',
         }
       })
@@ -124,7 +112,6 @@ export default async (req: Request, context: Context) => {
       return new Response(JSON.stringify({ error: "Task not found or unauthorized" }), {
         status: 404,
         headers: {
-          'Access-Control-Allow-Origin': '*',
           'Content-Type': 'application/json',
         }
       })
@@ -134,10 +121,6 @@ export default async (req: Request, context: Context) => {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Max-Age": "86400",
       }
     })
   } catch (error) {
@@ -146,7 +129,6 @@ export default async (req: Request, context: Context) => {
       status: 500,
       headers: {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
       }
     })
   }

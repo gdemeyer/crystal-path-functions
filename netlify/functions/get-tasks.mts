@@ -8,25 +8,18 @@ let cachedDb: Db
 
 export default async (req: Request, context: Context) => {
     console.log(req)
+    
+    // Handle OPTIONS preflight request
     if (req.method === "OPTIONS") {
-        return new Response(null, {
-            status: 204,
-            headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization, Access-Control-Allow-Origin",
-            "Access-Control-Max-Age": "86400", // 24 hours
-            },
-        });
+        return new Response(null, { status: 204 });
     }
-
+    
     // Only accept GET requests
     if (req.method !== "GET") {
       return new Response(JSON.stringify({ error: "Method not allowed" }), {
         status: 405,
         headers: {
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
         }
       })
     }
@@ -40,7 +33,6 @@ export default async (req: Request, context: Context) => {
       return new Response(JSON.stringify({ error: errorMessage }), {
         status: 401,
         headers: {
-          'Access-Control-Allow-Origin': '*',
           'Content-Type': 'application/json',
         }
       })
@@ -58,16 +50,12 @@ export default async (req: Request, context: Context) => {
       const tasks = await collection.find({ 
         userId: userId,
         status: { $ne: TASK_STATUS.COMPLETED }
-      }).toArray();
+      }).sort({ score: -1 }).toArray();
       console.log(tasks)
       return new Response(JSON.stringify(tasks), {
           status: 200,
           headers: {
               'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': '*',
-              "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-              "Access-Control-Allow-Headers": "Content-Type, Authorization",
-              "Access-Control-Max-Age": "86400", // 24 hours
           }
       });
     } catch (error) {
@@ -76,7 +64,6 @@ export default async (req: Request, context: Context) => {
         status: 500,
         headers: {
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
         }
       })
     }

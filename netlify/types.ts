@@ -1,5 +1,5 @@
 export interface Task {
-    title: String;
+    title: string;
     difficulty: number;
     impact: number;
     time: number;
