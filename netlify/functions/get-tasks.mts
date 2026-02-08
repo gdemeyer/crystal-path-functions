@@ -11,7 +11,14 @@ export default async (req: Request, context: Context) => {
     
     // Handle OPTIONS preflight request
     if (req.method === "OPTIONS") {
-        return new Response(null, { status: 204 });
+        return new Response(null, {
+            status: 204,
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+            }
+        });
     }
     
     // Only accept GET requests
@@ -20,6 +27,7 @@ export default async (req: Request, context: Context) => {
         status: 405,
         headers: {
           'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
         }
       })
     }
@@ -34,6 +42,7 @@ export default async (req: Request, context: Context) => {
         status: 401,
         headers: {
           'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
         }
       })
     }
@@ -56,6 +65,7 @@ export default async (req: Request, context: Context) => {
           status: 200,
           headers: {
               'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
           }
       });
     } catch (error) {
@@ -64,6 +74,7 @@ export default async (req: Request, context: Context) => {
         status: 500,
         headers: {
           'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
         }
       })
     }

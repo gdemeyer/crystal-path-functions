@@ -11,7 +11,14 @@ export default async (req: Request, context: Context) => {
   
   // Handle OPTIONS preflight request
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204 });
+    return new Response(null, {
+        status: 204,
+        headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'PATCH, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        }
+    });
   }
   
   // Only accept PATCH requests
@@ -20,6 +27,7 @@ export default async (req: Request, context: Context) => {
       status: 405,
       headers: {
         'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
       }
     })
   }
@@ -34,12 +42,13 @@ export default async (req: Request, context: Context) => {
       status: 401,
       headers: {
         'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
       }
     })
   }
 
   // Parse request body
-  let requestBody
+  let requestBody: any
   try {
     requestBody = await req.json()
   } catch (error) {
@@ -47,6 +56,7 @@ export default async (req: Request, context: Context) => {
       status: 400,
       headers: {
         'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
       }
     })
   }
@@ -59,6 +69,7 @@ export default async (req: Request, context: Context) => {
       status: 400,
       headers: {
         'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
       }
     })
   }
@@ -68,6 +79,7 @@ export default async (req: Request, context: Context) => {
       status: 400,
       headers: {
         'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
       }
     })
   }
@@ -91,6 +103,7 @@ export default async (req: Request, context: Context) => {
         status: 400,
         headers: {
           'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
         }
       })
     }
@@ -113,6 +126,7 @@ export default async (req: Request, context: Context) => {
         status: 404,
         headers: {
           'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
         }
       })
     }
@@ -121,6 +135,7 @@ export default async (req: Request, context: Context) => {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
       }
     })
   } catch (error) {
@@ -129,6 +144,7 @@ export default async (req: Request, context: Context) => {
       status: 500,
       headers: {
         'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
       }
     })
   }
