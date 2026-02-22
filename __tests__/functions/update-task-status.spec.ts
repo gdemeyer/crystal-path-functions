@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import handler from './update-task-status'
+import handler from '../../netlify/functions/update-task-status.mts'
 
 vi.mock('mongodb')
-vi.mock('../utils/auth')
+vi.mock('../../netlify/utils/auth')
 
 describe('update-task-status endpoint', () => {
   beforeEach(() => {
@@ -33,7 +33,7 @@ describe('update-task-status endpoint', () => {
       body: JSON.stringify({ taskId: '123', status: 'COMPLETED' }),
     })
 
-    const { validateToken } = await import('../utils/auth')
+    const { validateToken } = await import('../../netlify/utils/auth')
     vi.mocked(validateToken).mockRejectedValueOnce(new Error('Unauthorized'))
 
     const response = await handler(req, {} as any)
@@ -41,7 +41,7 @@ describe('update-task-status endpoint', () => {
   })
 
   it('returns 400 when request body is invalid JSON', async () => {
-    const { validateToken } = await import('../utils/auth')
+    const { validateToken } = await import('../../netlify/utils/auth')
     vi.mocked(validateToken).mockResolvedValueOnce('test-user-123')
 
     const req = new Request('http://localhost/.netlify/functions/update-task-status', {
@@ -55,7 +55,7 @@ describe('update-task-status endpoint', () => {
   })
 
   it('returns 400 when taskId or status is missing', async () => {
-    const { validateToken } = await import('../utils/auth')
+    const { validateToken } = await import('../../netlify/utils/auth')
     vi.mocked(validateToken).mockResolvedValueOnce('test-user-123')
 
     const req = new Request('http://localhost/.netlify/functions/update-task-status', {
@@ -69,7 +69,7 @@ describe('update-task-status endpoint', () => {
   })
 
   it('returns 400 when status is invalid', async () => {
-    const { validateToken } = await import('../utils/auth')
+    const { validateToken } = await import('../../netlify/utils/auth')
     vi.mocked(validateToken).mockResolvedValueOnce('test-user-123')
 
     const req = new Request('http://localhost/.netlify/functions/update-task-status', {

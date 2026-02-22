@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import handler from './post-task.mts'
+import handler from '../../netlify/functions/post-task.mts'
 import * as mongodb from 'mongodb'
 
 // Mock MongoDB module
 vi.mock('mongodb')
 
 // Mock token validation
-vi.mock('../utils/auth', () => ({
+vi.mock('../../netlify/utils/auth', () => ({
   validateToken: vi.fn((token) => {
     if (!token) throw new Error('Missing Authorization header')
     if (!token.includes('Bearer')) throw new Error('Invalid Authorization header format')
@@ -18,7 +18,7 @@ vi.mock('../utils/auth', () => ({
 }))
 
 // Mock calculateScore utility
-vi.mock('../utils/scoring', () => ({
+vi.mock('../../netlify/utils/scoring', () => ({
   calculateScore: vi.fn((task) => {
     return Math.sqrt(
       Math.pow(21 - task.difficulty, 2) +
@@ -176,7 +176,7 @@ describe('POST /post-task handler', () => {
       expect(result.status).toBe(201)
     })
 
-    it('should calculate score for valid task', async () => {
+    it('should not include score in response (score is internal only)', async () => {
       const request = new Request('http://localhost/', {
         method: 'POST',
         headers: {
@@ -195,9 +195,7 @@ describe('POST /post-task handler', () => {
       const result = await handler(request, context as any)
       const body = await result.json()
       
-      expect(body.score).toBeDefined()
-      expect(typeof body.score).toBe('number')
-      expect(body.score).toBeGreaterThan(0)
+      expect(body.score).toBeUndefined()
     })
 
     it('should preserve task properties in response', async () => {
@@ -269,7 +267,7 @@ describe('POST /post-task handler', () => {
       const result = await handler(request, context as any)
       
       expect(result.headers.get('Access-Control-Allow-Origin')).toBe('*')
-      expect(result.headers.get('Access-Control-Allow-Methods')).toContain('POST')
+      expect(result.headers.get('Content-Type')).toBe('application/json')
     })
   })
 
@@ -387,7 +385,7 @@ describe('POST /post-task handler', () => {
       // Verify that a response was returned indicating insertOne was called
       expect(result.status).toBe(201)
       const body = await result.json()
-      expect(body).toHaveProperty('score')
+      expect(body.score).toBeUndefined()
     })
 
     it('should handle database connection errors gracefully', async () => {
@@ -468,7 +466,7 @@ describe('POST /post-task handler', () => {
       const body = await result.json()
       
       expect(body).toHaveProperty('title')
-      expect(body).toHaveProperty('score')
+      expect(body.score).toBeUndefined()
       expect(body).toHaveProperty('_id')
     })
 

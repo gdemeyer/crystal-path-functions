@@ -7,8 +7,6 @@ import { validateToken } from "../utils/auth";
 let cachedDb: Db
 
 export default async (req: Request, context: Context) => {
-  console.log(req)
-  
   // Handle OPTIONS preflight request
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -61,8 +59,9 @@ export default async (req: Request, context: Context) => {
       status: TASK_STATUS.COMPLETED
     }).sort({ statusChanged: -1 }).toArray();
     
-    console.log(tasks)
-    return new Response(JSON.stringify(tasks), {
+    // Strip score from response - score is internal only
+    const tasksWithoutScore = tasks.map(({ score, ...rest }: any) => rest);
+    return new Response(JSON.stringify(tasksWithoutScore), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
@@ -70,7 +69,6 @@ export default async (req: Request, context: Context) => {
       }
     });
   } catch (error) {
-    console.log(error)
     return new Response(JSON.stringify({ error: "Server error" }), { 
       status: 500,
       headers: {

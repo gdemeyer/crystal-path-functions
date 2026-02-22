@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import handler from './get-completed-tasks'
+import handler from '../../netlify/functions/get-completed-tasks.mts'
 
 vi.mock('mongodb')
-vi.mock('../utils/auth')
+vi.mock('../../netlify/utils/auth')
 
 describe('get-completed-tasks endpoint', () => {
   beforeEach(() => {
@@ -32,7 +32,7 @@ describe('get-completed-tasks endpoint', () => {
       method: 'GET',
     })
 
-    const { validateToken } = await import('../utils/auth')
+    const { validateToken } = await import('../../netlify/utils/auth')
     vi.mocked(validateToken).mockRejectedValueOnce(new Error('Unauthorized'))
 
     const response = await handler(req, {} as any)
@@ -40,7 +40,7 @@ describe('get-completed-tasks endpoint', () => {
   })
 
   it('returns empty array when user has no completed tasks', async () => {
-    const { validateToken } = await import('../utils/auth')
+    const { validateToken } = await import('../../netlify/utils/auth')
     vi.mocked(validateToken).mockResolvedValueOnce('test-user-123')
 
     const mockCollection = {

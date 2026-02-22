@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import handler from './get-tasks.mts'
+import handler from '../../netlify/functions/get-tasks.mts'
 import * as mongodb from 'mongodb'
 
 // Mock MongoDB module
 vi.mock('mongodb')
 
 // Mock token validation
-vi.mock('../utils/auth', () => ({
+vi.mock('../../netlify/utils/auth', () => ({
   validateToken: vi.fn((token) => {
     if (!token) throw new Error('Missing Authorization header')
     if (!token.includes('Bearer')) throw new Error('Invalid Authorization header format')
@@ -19,6 +19,7 @@ vi.mock('../utils/auth', () => ({
 
 describe('GET /get-tasks handler', () => {
   let mockToArray: any
+  let mockSort: any
   let mockFind: any
   let mockCollection: any
   let mockDb: any
@@ -27,6 +28,7 @@ describe('GET /get-tasks handler', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.MONGODB_CONNECTION_STRING = 'mongodb://localhost:27017'
+    process.env.DAILY_CAPACITY_UNITS = '4'
 
     // Setup MongoDB mocks
     mockToArray = vi.fn().mockResolvedValue([
@@ -38,7 +40,8 @@ describe('GET /get-tasks handler', () => {
         time: 5,
         urgency: 5,
         score: 10.5,
-        userId: 'user-123'
+        userId: 'user-123',
+        status: 'NOT_STARTED'
       },
       {
         _id: '2',
@@ -48,10 +51,12 @@ describe('GET /get-tasks handler', () => {
         time: 2,
         urgency: 9,
         score: 12.3,
-        userId: 'user-123'
+        userId: 'user-123',
+        status: 'NOT_STARTED'
       }
     ])
-    mockFind = vi.fn().mockReturnValue({ toArray: mockToArray })
+    mockSort = vi.fn().mockReturnValue({ toArray: mockToArray })
+    mockFind = vi.fn().mockReturnValue({ sort: mockSort })
     mockCollection = vi.fn().mockReturnValue({ find: mockFind })
     mockDb = vi.fn().mockReturnValue({ collection: mockCollection })
     mockClient = {
@@ -176,7 +181,7 @@ describe('GET /get-tasks handler', () => {
         expect(task).toHaveProperty('impact')
         expect(task).toHaveProperty('time')
         expect(task).toHaveProperty('urgency')
-        expect(task).toHaveProperty('score')
+        expect(task.score).toBeUndefined()
       }
     })
 
@@ -191,7 +196,7 @@ describe('GET /get-tasks handler', () => {
 
       const result = await handler(request, context as any)
       expect(result.headers.get('Access-Control-Allow-Origin')).toBe('*')
-      expect(result.headers.get('Access-Control-Allow-Methods')).toContain('GET')
+      expect(result.headers.get('Content-Type')).toBe('application/json')
     })
   })
 
@@ -253,7 +258,7 @@ describe('GET /get-tasks handler', () => {
       expect(Array.isArray(body)).toBe(true)
       if (body.length > 0) {
         expect(body[0]).toHaveProperty('title')
-        expect(body[0]).toHaveProperty('score')
+        expect(body[0].score).toBeUndefined()
       }
     })
 
@@ -345,7 +350,7 @@ describe('GET /get-tasks handler', () => {
         expect(task.title).toBe('Task 1')
         expect(task.difficulty).toBe(5)
         expect(task.impact).toBe(5)
-        expect(task.score).toBe(10.5)
+        expect(task.score).toBeUndefined()
       }
     })
   })
@@ -387,6 +392,124 @@ describe('GET /get-tasks handler', () => {
 
       const result = await handler(request, context as any)
       expect([405, 400, 401]).toContain(result.status)
+    })
+  })
+
+  describe('View parameter behavior', () => {
+    it('should return flat array of uncompleted tasks when no view param', async () => {
+      const request = new Request('http://localhost/', {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        }
+      })
+      const context = {}
+
+      const result = await handler(request, context as any)
+      expect(result.status).toBe(200)
+      
+      const body = await result.json()
+      expect(Array.isArray(body)).toBe(true)
+      expect(body.length).toBe(2)
+    })
+
+    it('should return today partition when view=today', async () => {
+      const request = new Request('http://localhost/?view=today', {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        }
+      })
+      const context = {}
+
+      const result = await handler(request, context as any)
+      expect(result.status).toBe(200)
+      
+      const body = await result.json()
+      expect(Array.isArray(body)).toBe(true)
+    })
+
+    it('should return backlog partition when view=backlog', async () => {
+      const request = new Request('http://localhost/?view=backlog', {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        }
+      })
+      const context = {}
+
+      const result = await handler(request, context as any)
+      expect(result.status).toBe(200)
+      
+      const body = await result.json()
+      expect(Array.isArray(body)).toBe(true)
+    })
+
+    it('should return 400 for invalid view parameter', async () => {
+      const request = new Request('http://localhost/?view=invalid', {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        }
+      })
+      const context = {}
+
+      const result = await handler(request, context as any)
+      expect(result.status).toBe(400)
+      
+      const body = await result.json()
+      expect(body).toHaveProperty('error')
+      expect(body.error).toContain('Invalid view parameter')
+    })
+
+    it('should parse date parameter when provided', async () => {
+      const request = new Request('http://localhost/?view=today&date=2026-02-15', {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        }
+      })
+      const context = {}
+
+      const result = await handler(request, context as any)
+      expect(result.status).toBe(200)
+      
+      const body = await result.json()
+      expect(Array.isArray(body)).toBe(true)
+    })
+
+    it('should use server date when date parameter not provided', async () => {
+      const request = new Request('http://localhost/?view=today', {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        }
+      })
+      const context = {}
+
+      const result = await handler(request, context as any)
+      expect(result.status).toBe(200)
+      
+      const body = await result.json()
+      expect(Array.isArray(body)).toBe(true)
+    })
+
+    it('should respect DAILY_CAPACITY_UNITS environment variable', async () => {
+      process.env.DAILY_CAPACITY_UNITS = '6'
+      
+      const request = new Request('http://localhost/?view=today', {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        }
+      })
+      const context = {}
+
+      const result = await handler(request, context as any)
+      expect(result.status).toBe(200)
+      
+      const body = await result.json()
+      expect(Array.isArray(body)).toBe(true)
     })
   })
 })

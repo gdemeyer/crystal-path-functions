@@ -109,7 +109,9 @@ export default async (req: Request, context: Context) => {
     const collection = cachedDb.collection(MONGODB_TASK_COLLECTION_NAME)
     const result = await collection.insertOne(taskWithScore)
     
-    return new Response(JSON.stringify({ ...taskWithScore, _id: result.insertedId }), {
+    // Strip score from response - score is internal only
+    const { score, ...responseTask } = taskWithScore
+    return new Response(JSON.stringify({ ...responseTask, _id: result.insertedId }), {
         status: 201,
         headers: {
             'Content-Type': 'application/json',
