@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { validateToken, extractUserIdFromToken } from './auth';
+import { validateToken, validateGoogleToken, validateSessionToken, extractUserIdFromToken } from './auth';
 
 // Mock google-auth-library
 vi.mock('google-auth-library', () => {
@@ -9,6 +9,13 @@ vi.mock('google-auth-library', () => {
         })),
     };
 });
+
+// Mock jwt utility
+vi.mock('./jwt', () => ({
+    verifyToken: vi.fn(),
+}))
+
+import { verifyToken } from './jwt'
 
 describe('Token Validation Utils', () => {
     beforeEach(() => {
@@ -49,7 +56,7 @@ describe('Token Validation Utils', () => {
         });
     });
 
-    describe('validateToken - Real Google Tokens', () => {
+    describe('validateGoogleToken - Real Google Tokens', () => {
         beforeEach(() => {
             process.env.DEMO_MODE = 'false';
             process.env.GOOGLE_CLIENT_ID = 'test-client-id';
@@ -59,16 +66,16 @@ describe('Token Validation Utils', () => {
             delete process.env.GOOGLE_CLIENT_ID;
             process.env.DEMO_MODE = 'false';
             const token = 'Bearer real-google-token';
-            await expect(validateToken(token)).rejects.toThrow('GOOGLE_CLIENT_ID not configured');
+            await expect(validateGoogleToken(token)).rejects.toThrow('GOOGLE_CLIENT_ID not configured');
         });
 
         it('should reject missing Authorization header', async () => {
-            await expect(validateToken(undefined)).rejects.toThrow('Missing Authorization header');
+            await expect(validateGoogleToken(undefined)).rejects.toThrow('Missing Authorization header');
         });
 
         it('should reject malformed Authorization header', async () => {
             const token = 'InvalidToken';
-            await expect(validateToken(token)).rejects.toThrow('Invalid Authorization header format');
+            await expect(validateGoogleToken(token)).rejects.toThrow('Invalid Authorization header format');
         });
     });
 
@@ -121,5 +128,61 @@ describe('Token Validation Utils', () => {
             const userId = extractUserIdFromToken(token);
             expect(userId).toBe('550e8400-e29b-41d4-a716-446655440000');
         });
+    });
+
+    describe('validateSessionToken - Backend JWT validation', () => {
+        beforeEach(() => {
+            delete process.env.DEMO_MODE;
+        })
+
+        it('should return userId from a valid backend JWT', async () => {
+            ;(verifyToken as any).mockReturnValue({ sub: 'user-from-jwt' })
+
+            const result = await validateSessionToken('Bearer some-backend-jwt')
+            expect(result).toBe('user-from-jwt')
+        })
+
+        it('should call verifyToken with the extracted token string', async () => {
+            ;(verifyToken as any).mockReturnValue({ sub: 'user-123' })
+
+            await validateSessionToken('Bearer my-jwt-token')
+            expect(verifyToken).toHaveBeenCalledWith('my-jwt-token')
+        })
+
+        it('should throw for missing Authorization header', async () => {
+            await expect(validateSessionToken(undefined)).rejects.toThrow('Missing Authorization header')
+        })
+
+        it('should throw for malformed Authorization header', async () => {
+            await expect(validateSessionToken('InvalidFormat')).rejects.toThrow('Invalid Authorization header format')
+        })
+
+        it('should throw when JWT verification fails', async () => {
+            ;(verifyToken as any).mockImplementation(() => { throw new Error('Token expired') })
+
+            await expect(validateSessionToken('Bearer expired-jwt'))
+                .rejects.toThrow('Token verification failed')
+        })
+
+        it('should throw when JWT payload has no sub claim', async () => {
+            ;(verifyToken as any).mockReturnValue({ iat: 123 })
+
+            await expect(validateSessionToken('Bearer jwt-without-sub'))
+                .rejects.toThrow('Token missing user ID')
+        })
+
+        it('should still accept demo tokens in demo mode', async () => {
+            process.env.DEMO_MODE = 'true'
+
+            const result = await validateSessionToken('Bearer dummy-token-demo-user')
+            expect(result).toBe('demo-user')
+            expect(verifyToken).not.toHaveBeenCalled()
+        })
+    });
+
+    describe('validateGoogleToken', () => {
+        it('should be exported and callable', () => {
+            expect(typeof validateGoogleToken).toBe('function')
+        })
     });
 });
