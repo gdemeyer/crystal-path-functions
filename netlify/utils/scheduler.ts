@@ -1,13 +1,19 @@
 import { TASK_STATUS } from "../../consts-status";
 import { Task } from "../types";
+import { utcMsToLocalDate } from "./timezone";
 
-export function partitionTasksForDate(tasks: Task[], date: string, dailyCapacityUnits = 4) {
+export function partitionTasksForDate(tasks: Task[], date: string, dailyCapacityUnits = 4, timezone?: string) {
   const difficultyMultiplier = (d: number | undefined) => 1 + (( (d ?? 10) - 10) / 20);
+
+  const toDateStr = (ms: number): string =>
+    timezone
+      ? utcMsToLocalDate(ms, timezone)
+      : new Date(ms).toISOString().slice(0, 10);
 
   const completedToday = (tasks || []).filter(t =>
     t.status === TASK_STATUS.COMPLETED &&
     t.statusChanged &&
-    new Date(t.statusChanged).toISOString().slice(0, 10) === date
+    toDateStr(t.statusChanged) === date
   );
 
   const used = completedToday.reduce((sum, t) => {

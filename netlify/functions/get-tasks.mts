@@ -5,6 +5,7 @@ import { TASK_STATUS } from "../../consts-status";
 import { validateToken } from "../utils/auth";
 import partitionTasksForDate from "../utils/scheduler";
 import { Task } from "../types";
+import { addDays, isValidTimezone, startOfDayUtcMs, utcMsToLocalDate } from "../utils/timezone";
 
 let cachedDb: Db
 
@@ -60,6 +61,18 @@ export default async (req: Request, context: Context) => {
       const url = new URL(req.url);
       const view = url.searchParams.get('view');
       const dateParam = url.searchParams.get('date');
+      const timezoneParam = url.searchParams.get('timezone');
+
+      // Validate timezone parameter
+      if (timezoneParam !== null && !isValidTimezone(timezoneParam)) {
+        return new Response(JSON.stringify({ error: "Invalid timezone parameter" }), {
+          status: 400,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          }
+        });
+      }
       
       // Validate view parameter
       if (view !== null && view !== 'today' && view !== 'backlog') {
@@ -85,19 +98,23 @@ export default async (req: Request, context: Context) => {
         payload = tasks.map(({ score, ...rest }) => rest) as Task[];
       } else {
         // view=today or view=backlog: use scheduler
-        const date = dateParam ?? new Date().toISOString().slice(0, 10);
+        // Determine "today" using the client's timezone when available
+        const date = dateParam ?? (
+          timezoneParam
+            ? utcMsToLocalDate(Date.now(), timezoneParam)
+            : new Date().toISOString().slice(0, 10)
+        );
         const dailyCapacityUnits = Number(process.env.DAILY_CAPACITY_UNITS ?? 4);
 
-        // Helper to get start of day timestamp in ms
-        const getStartOfDay = (dateStr: string): number => {
-          const d = new Date(dateStr + 'T00:00:00.000Z');
-          return d.getTime();
-        };
+        // Compute day boundaries — timezone-aware when the client sends one
+        const startOfDayMs = timezoneParam
+          ? startOfDayUtcMs(date, timezoneParam)
+          : new Date(date + 'T00:00:00.000Z').getTime();
 
-        const startOfDayMs = getStartOfDay(date);
-        const nextDay = new Date(date);
-        nextDay.setDate(nextDay.getDate() + 1);
-        const startOfNextDayMs = getStartOfDay(nextDay.toISOString().slice(0, 10));
+        const nextDayStr = addDays(date, 1);
+        const startOfNextDayMs = timezoneParam
+          ? startOfDayUtcMs(nextDayStr, timezoneParam)
+          : new Date(nextDayStr + 'T00:00:00.000Z').getTime();
 
         // Optimized MongoDB query: active tasks + completed-today tasks
         const tasks = await collection.find({
@@ -114,7 +131,7 @@ export default async (req: Request, context: Context) => {
           ]
         }).sort({ score: -1 }).toArray() as Task[];
 
-        const { today, backlog } = partitionTasksForDate(tasks, date, dailyCapacityUnits);
+        const { today, backlog } = partitionTasksForDate(tasks, date, dailyCapacityUnits, timezoneParam ?? undefined);
         
         // Strip score from response - score is internal only
         const stripScore = (t: Task[]) => t.map(({ score, ...rest }) => rest) as Task[];

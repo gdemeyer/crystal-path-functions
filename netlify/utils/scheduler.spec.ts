@@ -236,4 +236,62 @@ describe('scheduler - partitionTasksForDate', () => {
       expect(result.backlog.length).toBe(0);
     });
   });
+
+  describe('Timezone-aware completion matching', () => {
+    it('should match completed task to correct local date when timezone supplied', () => {
+      // 2026-02-11 03:00 UTC = 2026-02-10 22:00 EST
+      // Without timezone this timestamp is Feb 11 (UTC), with timezone it is Feb 10 (local)
+      const lateEveningEstAsUtc = new Date('2026-02-11T03:00:00Z').getTime();
+
+      const tasks: Task[] = [
+        { _id: '1', title: 'Completed late', difficulty: 10, impact: 15, time: 2, urgency: 10, score: 100, status: TASK_STATUS.COMPLETED, statusChanged: lateEveningEstAsUtc },
+        { _id: '2', title: 'Active Task 1', difficulty: 10, impact: 10, time: 2, urgency: 5, score: 90, status: TASK_STATUS.NOT_STARTED },
+        { _id: '3', title: 'Active Task 2', difficulty: 10, impact: 8, time: 2, urgency: 3, score: 80, status: TASK_STATUS.NOT_STARTED },
+        { _id: '4', title: 'Active Task 3', difficulty: 10, impact: 6, time: 2, urgency: 2, score: 70, status: TASK_STATUS.NOT_STARTED },
+      ];
+
+      // Without timezone: Feb 11 UTC ≠ Feb 10, so no capacity consumed
+      // All 3 active tasks fit (2+2+2=6 ≤ 6)
+      const withoutTz = partitionTasksForDate(tasks, testDate, 6);
+      expect(withoutTz.today.length).toBe(3);
+
+      // With timezone (EST): completed task's local date IS Feb 10, consuming 2 units
+      // remaining = 6 - 2 = 4, only 2 active tasks fit (2+2=4 ≤ 4)
+      const withTz = partitionTasksForDate(tasks, testDate, 6, 'America/New_York');
+      expect(withTz.today.length).toBe(2);
+      expect(withTz.backlog.length).toBe(1);
+    });
+
+    it('should exclude tasks completed on a different local date', () => {
+      // 2026-02-09 20:00 UTC = 2026-02-10 05:00 JST (next day in Tokyo)
+      const eveningUtc = new Date('2026-02-09T20:00:00Z').getTime();
+
+      const tasks: Task[] = [
+        { _id: '1', title: 'Completed', difficulty: 10, impact: 15, time: 2, urgency: 10, score: 100, status: TASK_STATUS.COMPLETED, statusChanged: eveningUtc },
+        { _id: '2', title: 'Active', difficulty: 10, impact: 10, time: 2, urgency: 5, score: 90, status: TASK_STATUS.NOT_STARTED },
+      ];
+
+      // UTC date is Feb 9 → no match for Feb 10
+      const withoutTz = partitionTasksForDate(tasks, testDate, 4);
+      expect(withoutTz.today.length).toBe(1); // no capacity consumed, only active fits fully
+
+      // Tokyo local date is Feb 10 → matches testDate
+      const withTzTokyo = partitionTasksForDate(tasks, testDate, 4, 'Asia/Tokyo');
+      expect(withTzTokyo.today.length).toBe(1);
+      expect(withTzTokyo.today[0]._id).toBe('2'); // capacity reduced
+    });
+
+    it('should still work correctly without timezone (backward-compatible)', () => {
+      const completedTodayTimestamp = new Date('2026-02-10T10:00:00Z').getTime();
+      const tasks: Task[] = [
+        { _id: '1', title: 'Completed', difficulty: 10, impact: 15, time: 2, urgency: 10, score: 100, status: TASK_STATUS.COMPLETED, statusChanged: completedTodayTimestamp },
+        { _id: '2', title: 'Active', difficulty: 10, impact: 10, time: 2, urgency: 5, score: 90, status: TASK_STATUS.NOT_STARTED },
+      ];
+
+      const result = partitionTasksForDate(tasks, testDate, 4);
+      // Capacity = 4, completed consumed 2, remaining = 2, active fits
+      expect(result.today.length).toBe(1);
+      expect(result.today[0]._id).toBe('2');
+    });
+  });
 });
