@@ -15,6 +15,6 @@ export function calculateScore(task: Task): number {
     Math.pow(21 - task.difficulty, 2) +
     Math.pow(task.impact, 2) * 1.2 +
     Math.pow(21 - task.time, 2) +
-    Math.pow(task.urgency, 2) * 1.2
+    Math.pow(task.urgency, 2) * 1.5
   )
 }

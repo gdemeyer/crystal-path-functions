@@ -22,7 +22,7 @@ describe('scoring utility', () => {
       Math.pow(21 - 5, 2) +
       Math.pow(8, 2) * 1.2 +
       Math.pow(21 - 3, 2) +
-      Math.pow(13, 2) * 1.2
+      Math.pow(13, 2) * 1.5
     )
     expect(score).toBeCloseTo(expected, 5)
   })
