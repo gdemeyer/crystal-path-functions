@@ -1,12 +1,10 @@
 import type { Context } from '@netlify/functions'
-import { Db, MongoClient } from 'mongodb'
+import { MongoClient } from 'mongodb'
 import { MONGODB_DB_NAME, MONGODB_TASK_COLLECTION_NAME } from '../../consts'
 import { TASK_STATUS } from '../../consts-status'
 import { isTask } from '../types'
-import { calculateScore } from '../utils/scoring'
+import { calculateScore, SCORE_VERSION } from '../utils/scoring'
 import { validateToken } from '../utils/auth'
-
-let cachedDb: Db
 
 export default async (req: Request, context: Context) => {
   console.log(req)
@@ -93,6 +91,7 @@ export default async (req: Request, context: Context) => {
   const taskWithScore = {
     ...taskData,
     score: calculateScore(taskToInsert),
+    scoreVersion: SCORE_VERSION,
     userId: userId,
     status: TASK_STATUS.NOT_STARTED,
     statusChanged: Date.now()
@@ -100,17 +99,12 @@ export default async (req: Request, context: Context) => {
 
   try {
     const client = await MongoClient.connect(process.env.MONGODB_CONNECTION_STRING ?? "")
-
-    if (!cachedDb) {
-      const db = client.db(MONGODB_DB_NAME)
-      cachedDb = db
-    }
-
-    const collection = cachedDb.collection(MONGODB_TASK_COLLECTION_NAME)
+    const db = client.db(MONGODB_DB_NAME)
+    const collection = db.collection(MONGODB_TASK_COLLECTION_NAME)
     const result = await collection.insertOne(taskWithScore)
     
-    // Strip score from response - score is internal only
-    const { score, ...responseTask } = taskWithScore
+    // Strip score and scoreVersion from response - both are internal only
+    const { score, scoreVersion, ...responseTask } = taskWithScore
     return new Response(JSON.stringify({ ...responseTask, _id: result.insertedId }), {
         status: 201,
         headers: {

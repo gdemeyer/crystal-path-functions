@@ -19,6 +19,7 @@ vi.mock('../../netlify/utils/auth', () => ({
 
 // Mock calculateScore utility
 vi.mock('../../netlify/utils/scoring', () => ({
+  SCORE_VERSION: 1,
   calculateScore: vi.fn((task) => {
     return Math.sqrt(
       Math.pow(21 - task.difficulty, 2) +
@@ -490,6 +491,53 @@ describe('POST /post-task handler', () => {
       
       expect(result.headers.get('Content-Type')).toContain('application/json')
       expect(result.headers.get('Access-Control-Allow-Origin')).toBe('*')
+    })
+  })
+
+  describe('Score versioning', () => {
+    it('should store scoreVersion on the inserted document', async () => {
+      const request = new Request('http://localhost/', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer dummy-token-test-user'
+        },
+        body: JSON.stringify({
+          title: 'Test Task',
+          difficulty: 5,
+          impact: 8,
+          time: 3,
+          urgency: 13
+        })
+      })
+      const context = {}
+
+      await handler(request, context as any)
+
+      const insertedDoc = mockInsertOne.mock.calls[0][0]
+      expect(insertedDoc).toHaveProperty('scoreVersion')
+      expect(typeof insertedDoc.scoreVersion).toBe('number')
+    })
+
+    it('should not include scoreVersion in the response', async () => {
+      const request = new Request('http://localhost/', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer dummy-token-test-user'
+        },
+        body: JSON.stringify({
+          title: 'Test Task',
+          difficulty: 5,
+          impact: 8,
+          time: 3,
+          urgency: 13
+        })
+      })
+      const context = {}
+
+      const result = await handler(request, context as any)
+      const body = await result.json()
+
+      expect(body.scoreVersion).toBeUndefined()
     })
   })
 })

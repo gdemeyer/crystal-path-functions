@@ -40,6 +40,7 @@ describe('GET /get-tasks handler', () => {
         time: 5,
         urgency: 5,
         score: 10.5,
+        scoreVersion: 1,
         userId: 'user-123',
         status: 'NOT_STARTED'
       },
@@ -51,13 +52,14 @@ describe('GET /get-tasks handler', () => {
         time: 2,
         urgency: 9,
         score: 12.3,
+        scoreVersion: 1,
         userId: 'user-123',
         status: 'NOT_STARTED'
       }
     ])
     mockSort = vi.fn().mockReturnValue({ toArray: mockToArray })
     mockFind = vi.fn().mockReturnValue({ sort: mockSort })
-    mockCollection = vi.fn().mockReturnValue({ find: mockFind })
+    mockCollection = vi.fn().mockReturnValue({ find: mockFind, bulkWrite: vi.fn().mockResolvedValue({ modifiedCount: 0 }) })
     mockDb = vi.fn().mockReturnValue({ collection: mockCollection })
     mockClient = {
       db: mockDb
@@ -510,6 +512,132 @@ describe('GET /get-tasks handler', () => {
       
       const body = await result.json()
       expect(Array.isArray(body)).toBe(true)
+    })
+  })
+
+  describe('Score version auto-rescore', () => {
+    let mockBulkWrite: any
+
+    beforeEach(() => {
+      mockBulkWrite = vi.fn().mockResolvedValue({ modifiedCount: 0 })
+
+      // Tasks with NO scoreVersion and deliberately wrong score ordering.
+      // 'Low Priority Stale' has artificially HIGH stale score (50)
+      // 'High Priority Stale' has artificially LOW stale score (10)
+      // After recalculation with current formula:
+      //   High Priority (d=5,i=15,t=5,u=15) ≈ 33.5
+      //   Low Priority  (d=15,i=3,t=15,u=3) ≈ 9.8
+      mockToArray = vi.fn().mockResolvedValue([
+        {
+          _id: '1',
+          title: 'Low Priority Stale',
+          difficulty: 15,
+          impact: 3,
+          time: 15,
+          urgency: 3,
+          score: 50,
+          userId: 'user-123',
+          status: 'NOT_STARTED'
+        },
+        {
+          _id: '2',
+          title: 'High Priority Stale',
+          difficulty: 5,
+          impact: 15,
+          time: 5,
+          urgency: 15,
+          score: 10,
+          userId: 'user-123',
+          status: 'NOT_STARTED'
+        }
+      ])
+
+      mockSort = vi.fn().mockReturnValue({ toArray: mockToArray })
+      mockFind = vi.fn().mockReturnValue({ sort: mockSort })
+      mockCollection = vi.fn().mockReturnValue({
+        find: mockFind,
+        bulkWrite: mockBulkWrite
+      })
+      mockDb = vi.fn().mockReturnValue({ collection: mockCollection })
+      mockClient = { db: mockDb }
+
+      const MongoClientMock = mongodb.MongoClient as any
+      MongoClientMock.connect = vi.fn().mockResolvedValue(mockClient)
+    })
+
+    it('should rescore tasks that have no scoreVersion', async () => {
+      const request = new Request('http://localhost/', {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer dummy-token-user-123' }
+      })
+
+      await handler(request, {} as any)
+
+      expect(mockBulkWrite).toHaveBeenCalled()
+    })
+
+    it('should rescore tasks that have outdated scoreVersion', async () => {
+      mockToArray.mockResolvedValue([
+        {
+          _id: '1',
+          title: 'Old Versioned Task',
+          difficulty: 5,
+          impact: 8,
+          time: 3,
+          urgency: 13,
+          score: 10,
+          scoreVersion: 0,
+          userId: 'user-123',
+          status: 'NOT_STARTED'
+        }
+      ])
+
+      const request = new Request('http://localhost/', {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer dummy-token-user-123' }
+      })
+
+      await handler(request, {} as any)
+
+      expect(mockBulkWrite).toHaveBeenCalled()
+    })
+
+    it('should return tasks ordered by recalculated score, not stale DB score', async () => {
+      const request = new Request('http://localhost/', {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer dummy-token-user-123' }
+      })
+
+      const result = await handler(request, {} as any)
+      const body = await result.json() as any[]
+
+      // DB returns [Low Priority (stale 50), High Priority (stale 10)]
+      // After rescoring: High Priority ≈ 33.5, Low Priority ≈ 9.8
+      // Response should reflect recalculated order
+      expect(body.length).toBe(2)
+      expect(body[0].title).toBe('High Priority Stale')
+      expect(body[1].title).toBe('Low Priority Stale')
+    })
+
+    it('should persist recalculated scores with scoreVersion to database', async () => {
+      const request = new Request('http://localhost/', {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer dummy-token-user-123' }
+      })
+
+      await handler(request, {} as any)
+
+      expect(mockBulkWrite).toHaveBeenCalled()
+      const operations = mockBulkWrite.mock.calls[0][0]
+      expect(operations.length).toBe(2)
+
+      for (const op of operations) {
+        expect(op.updateOne).toBeDefined()
+        expect(op.updateOne.update.$set).toHaveProperty('score')
+        expect(op.updateOne.update.$set).toHaveProperty('scoreVersion')
+        expect(typeof op.updateOne.update.$set.score).toBe('number')
+        expect(typeof op.updateOne.update.$set.scoreVersion).toBe('number')
+      }
     })
   })
 })

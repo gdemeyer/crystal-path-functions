@@ -1,13 +1,44 @@
 import type { Context } from "@netlify/functions";
-import { Db, MongoClient } from "mongodb";
+import { Collection, MongoClient } from "mongodb";
 import { MONGODB_DB_NAME, MONGODB_TASK_COLLECTION_NAME } from "../../consts";
 import { TASK_STATUS } from "../../consts-status";
 import { validateToken } from "../utils/auth";
 import partitionTasksForDate from "../utils/scheduler";
 import { Task } from "../types";
 import { addDays, isValidTimezone, startOfDayUtcMs, utcMsToLocalDate } from "../utils/timezone";
+import { calculateScore, SCORE_VERSION } from "../utils/scoring";
 
-let cachedDb: Db
+/**
+ * For any tasks whose scoreVersion doesn't match the current SCORE_VERSION,
+ * recalculate scores and persist them via bulkWrite. The tasks array is
+ * mutated in place so the caller can re-sort and return fresher data without
+ * an additional DB round-trip.
+ */
+async function rescoreStaleTasksInPlace(tasks: Task[], collection: Collection): Promise<number> {
+  const stale = tasks.filter(t => t.scoreVersion !== SCORE_VERSION);
+  if (stale.length === 0) return 0;
+
+  const bulkOps = stale.map(t => ({
+    updateOne: {
+      filter: { _id: t._id },
+      update: {
+        $set: {
+          score: calculateScore(t),
+          scoreVersion: SCORE_VERSION
+        }
+      }
+    }
+  }));
+
+  collection.bulkWrite(bulkOps);
+
+  for (const t of stale) {
+    t.score = calculateScore(t);
+    t.scoreVersion = SCORE_VERSION;
+  }
+
+  return stale.length;
+}
 
 export default async (req: Request, context: Context) => {
     // Handle OPTIONS preflight request
@@ -50,12 +81,8 @@ export default async (req: Request, context: Context) => {
 
     try {
       const client = await MongoClient.connect(process.env.MONGODB_CONNECTION_STRING ?? "");
-      if (cachedDb === undefined) {
-        const db = client.db(MONGODB_DB_NAME); 
-        cachedDb = db;
-      }
-
-      const collection = cachedDb.collection(MONGODB_TASK_COLLECTION_NAME);
+      const db = client.db(MONGODB_DB_NAME);
+      const collection = db.collection(MONGODB_TASK_COLLECTION_NAME);
       
       // Parse query parameters
       const url = new URL(req.url);
@@ -93,9 +120,14 @@ export default async (req: Request, context: Context) => {
           userId: userId,
           status: { $ne: TASK_STATUS.COMPLETED }
         }).sort({ score: -1 }).toArray() as Task[];
-        
-        // Strip score from response - score is internal only
-        payload = tasks.map(({ score, ...rest }) => rest) as Task[];
+
+        const rescored = await rescoreStaleTasksInPlace(tasks, collection);
+        if (rescored > 0) {
+          tasks.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+        }
+
+        // Strip internal fields from response
+        payload = tasks.map(({ score, scoreVersion, ...rest }) => rest) as Task[];
       } else {
         // view=today or view=backlog: use scheduler
         // Determine "today" using the client's timezone when available
@@ -131,11 +163,13 @@ export default async (req: Request, context: Context) => {
           ]
         }).sort({ score: -1 }).toArray() as Task[];
 
+        await rescoreStaleTasksInPlace(tasks, collection);
+
         const { today, backlog } = partitionTasksForDate(tasks, date, dailyCapacityUnits, timezoneParam ?? undefined);
         
-        // Strip score from response - score is internal only
-        const stripScore = (t: Task[]) => t.map(({ score, ...rest }) => rest) as Task[];
-        payload = view === 'today' ? stripScore(today) : stripScore(backlog);
+        // Strip internal fields from response
+        const stripInternal = (t: Task[]) => t.map(({ score, scoreVersion, ...rest }) => rest) as Task[];
+        payload = view === 'today' ? stripInternal(today) : stripInternal(backlog);
       }
 
       return new Response(JSON.stringify(payload), {
@@ -146,6 +180,7 @@ export default async (req: Request, context: Context) => {
         }
       });
     } catch (error) {
+
       return new Response(JSON.stringify({ error: "Server error" }), { 
         status: 500,
         headers: {

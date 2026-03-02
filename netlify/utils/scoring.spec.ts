@@ -1,5 +1,15 @@
+import * as scoring from './scoring'
 import { calculateScore } from './scoring'
 import { Task } from '../types'
+
+describe('SCORE_VERSION', () => {
+  it('should be exported as a positive integer', () => {
+    expect(scoring).toHaveProperty('SCORE_VERSION')
+    expect(typeof (scoring as any).SCORE_VERSION).toBe('number')
+    expect(Number.isInteger((scoring as any).SCORE_VERSION)).toBe(true)
+    expect((scoring as any).SCORE_VERSION).toBeGreaterThan(0)
+  })
+})
 
 describe('scoring utility', () => {
   it('calculates score correctly', () => {

@@ -1,6 +1,13 @@
 import { Task } from '../types'
 
 /**
+ * Increment this value whenever the scoring formula changes.
+ * Tasks stored with an older version will be automatically rescored
+ * the next time they are fetched.
+ */
+export const SCORE_VERSION = 2
+
+/**
  * Calculate the priority score for a task.
  * Higher score = higher priority.
  * 

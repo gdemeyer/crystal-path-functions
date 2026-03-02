@@ -5,6 +5,7 @@ export interface Task {
     time: number;
     urgency: number;
     score?: number;
+    scoreVersion?: number;
     userId?: string;
     _id?: string;
     status?: string;
