@@ -540,4 +540,55 @@ describe('POST /post-task handler', () => {
       expect(body.scoreVersion).toBeUndefined()
     })
   })
+
+  describe('repeatOnComplete persistence', () => {
+    it('Persists repeatOnComplete: true when sent in body', async () => {
+      const request = new Request('http://localhost/', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        },
+        body: JSON.stringify({
+          title: 'Repeating Task',
+          difficulty: 5,
+          impact: 8,
+          time: 3,
+          urgency: 13,
+          repeatOnComplete: true
+        })
+      })
+      const context = {}
+
+      await handler(request, context as any)
+
+      // Verify insertOne was called with repeatOnComplete: true
+      expect(mockInsertOne).toHaveBeenCalledTimes(1)
+      const insertedDoc = mockInsertOne.mock.calls[0][0]
+      expect(insertedDoc.repeatOnComplete).toBe(true)
+    })
+
+    it('Tasks without repeatOnComplete default to no field', async () => {
+      const request = new Request('http://localhost/', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer dummy-token-user-123'
+        },
+        body: JSON.stringify({
+          title: 'Normal Task',
+          difficulty: 5,
+          impact: 8,
+          time: 3,
+          urgency: 13
+        })
+      })
+      const context = {}
+
+      await handler(request, context as any)
+
+      // Verify insertOne was called WITHOUT repeatOnComplete field
+      expect(mockInsertOne).toHaveBeenCalledTimes(1)
+      const insertedDoc = mockInsertOne.mock.calls[0][0]
+      expect(insertedDoc.repeatOnComplete).toBeUndefined()
+    })
+  })
 })

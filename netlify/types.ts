@@ -10,6 +10,9 @@ export interface Task {
     _id?: string;
     status?: string;
     statusChanged?: number;
+    repeatOnComplete?: boolean;
+    repeatingOriginId?: string;
+    eligibleAt?: number;
 }
 
 export function isTask(obj: any): obj is Task {

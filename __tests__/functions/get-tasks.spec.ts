@@ -349,9 +349,10 @@ describe('GET /get-tasks handler', () => {
 
       if (body.length > 0) {
         const task = body[0]
-        expect(task.title).toBe('Task 1')
-        expect(task.difficulty).toBe(5)
-        expect(task.impact).toBe(5)
+        // Task 2 has higher score (12.3) so it should be first when sorted by score
+        expect(task.title).toBe('Task 2')
+        expect(task.difficulty).toBe(3)
+        expect(task.impact).toBe(8)
         expect(task.score).toBeUndefined()
       }
     })
@@ -638,6 +639,366 @@ describe('GET /get-tasks handler', () => {
         expect(typeof op.updateOne.update.$set.score).toBe('number')
         expect(typeof op.updateOne.update.$set.scoreVersion).toBe('number')
       }
+    })
+  })
+
+  describe('eligibleAt filtering', () => {
+    beforeEach(() => {
+      vi.clearAllMocks()
+      process.env.MONGODB_CONNECTION_STRING = 'mongodb://localhost:27017'
+      process.env.DAILY_CAPACITY_UNITS = '4'
+    })
+
+    it('Flat view excludes tasks with eligibleAt in the future', async () => {
+      const futureTime = Date.now() + 86400000 // +1 day
+      
+      mockToArray = vi.fn().mockResolvedValue([
+        {
+          _id: '1',
+          title: 'Future Task',
+          difficulty: 5,
+          impact: 8,
+          time: 5,
+          urgency: 5,
+          score: 10.5,
+          scoreVersion: 1,
+          userId: 'user-123',
+          status: 'NOT_STARTED',
+          eligibleAt: futureTime
+        }
+      ])
+      mockSort = vi.fn().mockReturnValue({ toArray: mockToArray })
+      mockFind = vi.fn().mockReturnValue({ sort: mockSort })
+      mockCollection = vi.fn().mockReturnValue({ find: mockFind, bulkWrite: vi.fn().mockResolvedValue({ modifiedCount: 0 }) })
+      mockDb = vi.fn().mockReturnValue({ collection: mockCollection })
+      mockClient = { db: mockDb }
+
+      const MongoClientMock = mongodb.MongoClient as any
+      MongoClientMock.connect = vi.fn().mockResolvedValue(mockClient)
+
+      const request = new Request('http://localhost/', {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer dummy-token-user-123' }
+      })
+
+      await handler(request, {} as any)
+
+      // Verify find was called with eligibleAt filter
+      expect(mockFind).toHaveBeenCalledWith(expect.objectContaining({
+        $or: expect.arrayContaining([
+          expect.objectContaining({ eligibleAt: expect.objectContaining({ $exists: false }) }),
+          expect.objectContaining({ eligibleAt: expect.objectContaining({ $lte: expect.any(Number) }) })
+        ])
+      }))
+    })
+
+    it('Flat view includes tasks with eligibleAt in the past', async () => {
+      const pastTime = Date.now() - 1000
+      
+      mockToArray = vi.fn().mockResolvedValue([
+        {
+          _id: '1',
+          title: 'Past Task',
+          difficulty: 5,
+          impact: 8,
+          time: 5,
+          urgency: 5,
+          score: 10.5,
+          scoreVersion: 1,
+          userId: 'user-123',
+          status: 'NOT_STARTED',
+          eligibleAt: pastTime
+        }
+      ])
+      mockSort = vi.fn().mockReturnValue({ toArray: mockToArray })
+      mockFind = vi.fn().mockReturnValue({ sort: mockSort })
+      mockCollection = vi.fn().mockReturnValue({ find: mockFind, bulkWrite: vi.fn().mockResolvedValue({ modifiedCount: 0 }) })
+      mockDb = vi.fn().mockReturnValue({ collection: mockCollection })
+      mockClient = { db: mockDb }
+
+      const MongoClientMock = mongodb.MongoClient as any
+      MongoClientMock.connect = vi.fn().mockResolvedValue(mockClient)
+
+      const request = new Request('http://localhost/', {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer dummy-token-user-123' }
+      })
+
+      const result = await handler(request, {} as any)
+      const body = await result.json()
+
+      // Task should be included
+      expect(Array.isArray(body)).toBe(true)
+      expect(body.length).toBeGreaterThan(0)
+    })
+
+    it('Flat view includes tasks with no eligibleAt', async () => {
+      mockToArray = vi.fn().mockResolvedValue([
+        {
+          _id: '1',
+          title: 'Normal Task',
+          difficulty: 5,
+          impact: 8,
+          time: 5,
+          urgency: 5,
+          score: 10.5,
+          scoreVersion: 1,
+          userId: 'user-123',
+          status: 'NOT_STARTED'
+        }
+      ])
+      mockSort = vi.fn().mockReturnValue({ toArray: mockToArray })
+      mockFind = vi.fn().mockReturnValue({ sort: mockSort })
+      mockCollection = vi.fn().mockReturnValue({ find: mockFind, bulkWrite: vi.fn().mockResolvedValue({ modifiedCount: 0 }) })
+      mockDb = vi.fn().mockReturnValue({ collection: mockCollection })
+      mockClient = { db: mockDb }
+
+      const MongoClientMock = mongodb.MongoClient as any
+      MongoClientMock.connect = vi.fn().mockResolvedValue(mockClient)
+
+      const request = new Request('http://localhost/', {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer dummy-token-user-123' }
+      })
+
+      const result = await handler(request, {} as any)
+      const body = await result.json()
+
+      // Task should be included
+      expect(Array.isArray(body)).toBe(true)
+      expect(body.length).toBeGreaterThan(0)
+    })
+
+    it('view=today excludes tasks with eligibleAt > startOfNextDayMs', async () => {
+      const farFutureTime = Date.now() + 5 * 86400000 // +5 days (definitely after tomorrow)
+      
+      mockToArray = vi.fn().mockResolvedValue([
+        {
+          _id: '1',
+          title: 'Future Task',
+          difficulty: 5,
+          impact: 8,
+          time: 5,
+          urgency: 5,
+          score: 10.5,
+          scoreVersion: 1,
+          userId: 'user-123',
+          status: 'NOT_STARTED',
+          eligibleAt: farFutureTime
+        }
+      ])
+      mockSort = vi.fn().mockReturnValue({ toArray: mockToArray })
+      mockFind = vi.fn().mockReturnValue({ sort: mockSort })
+      mockCollection = vi.fn().mockReturnValue({ find: mockFind, bulkWrite: vi.fn().mockResolvedValue({ modifiedCount: 0 }) })
+      mockDb = vi.fn().mockReturnValue({ collection: mockCollection })
+      mockClient = { db: mockDb }
+
+      const MongoClientMock = mongodb.MongoClient as any
+      MongoClientMock.connect = vi.fn().mockResolvedValue(mockClient)
+
+      const request = new Request('http://localhost/?view=today', {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer dummy-token-user-123' }
+      })
+
+      await handler(request, {} as any)
+
+      // Verify find was called with eligibleAt filter including startOfNextDayMs threshold
+      expect(mockFind).toHaveBeenCalledWith(expect.objectContaining({
+        $and: expect.arrayContaining([
+          expect.objectContaining({
+            $or: expect.arrayContaining([
+              expect.objectContaining({ eligibleAt: expect.objectContaining({ $exists: false }) }),
+              expect.objectContaining({ eligibleAt: expect.objectContaining({ $lte: expect.any(Number) }) })
+            ])
+          })
+        ])
+      }))
+    })
+
+    it('view=today includes tasks with eligibleAt <= startOfNextDayMs', async () => {
+      const todayTime = Date.now()
+      
+      mockToArray = vi.fn().mockResolvedValue([
+        {
+          _id: '1',
+          title: 'Today Task',
+          difficulty: 5,
+          impact: 8,
+          time: 5,
+          urgency: 5,
+          score: 10.5,
+          scoreVersion: 1,
+          userId: 'user-123',
+          status: 'NOT_STARTED',
+          eligibleAt: todayTime
+        }
+      ])
+      mockSort = vi.fn().mockReturnValue({ toArray: mockToArray })
+      mockFind = vi.fn().mockReturnValue({ sort: mockSort })
+      mockCollection = vi.fn().mockReturnValue({ find: mockFind, bulkWrite: vi.fn().mockResolvedValue({ modifiedCount: 0 }) })
+      mockDb = vi.fn().mockReturnValue({ collection: mockCollection })
+      mockClient = { db: mockDb }
+
+      const MongoClientMock = mongodb.MongoClient as any
+      MongoClientMock.connect = vi.fn().mockResolvedValue(mockClient)
+
+      const request = new Request('http://localhost/?view=today', {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer dummy-token-user-123' }
+      })
+
+      const result = await handler(request, {} as any)
+      const body = await result.json()
+
+      // Task should be included  
+      expect(Array.isArray(body)).toBe(true)
+      expect(body.length).toBeGreaterThan(0)
+    })
+
+    it('view=backlog excludes tasks with eligibleAt > startOfNextDayMs', async () => {
+      const farFutureTime = Date.now() + 5 * 86400000
+      
+      mockToArray = vi.fn().mockResolvedValue([
+        {
+          _id: '1',
+          title: 'Future Task',
+          difficulty: 5,
+          impact: 8,
+          time: 5,
+          urgency: 5,
+          score: 10.5,
+          scoreVersion: 1,
+          userId: 'user-123',
+          status: 'NOT_STARTED',
+          eligibleAt: farFutureTime
+        }
+      ])
+      mockSort = vi.fn().mockReturnValue({ toArray: mockToArray })
+      mockFind = vi.fn().mockReturnValue({ sort: mockSort })
+      mockCollection = vi.fn().mockReturnValue({ find: mockFind, bulkWrite: vi.fn().mockResolvedValue({ modifiedCount: 0 }) })
+      mockDb = vi.fn().mockReturnValue({ collection: mockCollection })
+      mockClient = { db: mockDb }
+
+      const MongoClientMock = mongodb.MongoClient as any
+      MongoClientMock.connect = vi.fn().mockResolvedValue(mockClient)
+
+      const request = new Request('http://localhost/?view=backlog', {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer dummy-token-user-123' }
+      })
+
+      await handler(request, {} as any)
+
+      // Verify find was called with eligibleAt filter
+      expect(mockFind).toHaveBeenCalledWith(expect.objectContaining({
+        $and: expect.arrayContaining([
+          expect.objectContaining({
+            $or: expect.arrayContaining([
+              expect.objectContaining({ eligibleAt: expect.objectContaining({ $exists: false }) }),
+              expect.objectContaining({ eligibleAt: expect.objectContaining({ $lte: expect.any(Number) }) })
+            ])
+          })
+        ])
+      }))
+    })
+
+    it('view=backlog includes tasks with eligibleAt <= startOfNextDayMs', async () => {
+      const todayTime = Date.now()
+      
+      mockToArray = vi.fn().mockResolvedValue([
+        {
+          _id: '1',
+          title: 'Backlog Task',
+          difficulty: 15,
+          impact: 1,
+          time: 20,
+          urgency: 1,
+          score: 5,
+          scoreVersion: 1,
+          userId: 'user-123',
+          status: 'NOT_STARTED',
+          eligibleAt: todayTime
+        }
+      ])
+      mockSort = vi.fn().mockReturnValue({ toArray: mockToArray })
+      mockFind = vi.fn().mockReturnValue({ sort: mockSort })
+      mockCollection = vi.fn().mockReturnValue({ find: mockFind, bulkWrite: vi.fn().mockResolvedValue({ modifiedCount: 0 }) })
+      mockDb = vi.fn().mockReturnValue({ collection: mockCollection })
+      mockClient = { db: mockDb }
+
+      const MongoClientMock = mongodb.MongoClient as any
+      MongoClientMock.connect = vi.fn().mockResolvedValue(mockClient)
+
+      const request = new Request('http://localhost/?view=backlog', {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer dummy-token-user-123' }
+      })
+
+      await handler(request, {} as any)
+
+      // Verify find was called with eligibleAt filter
+      // The key point is that eligible tasks are NOT filtered out by the query
+      expect(mockFind).toHaveBeenCalledWith(expect.objectContaining({
+        $and: expect.arrayContaining([
+          expect.objectContaining({
+            $or: expect.arrayContaining([
+              expect.objectContaining({ eligibleAt: expect.objectContaining({ $exists: false }) }),
+              expect.objectContaining({ eligibleAt: expect.objectContaining({ $lte: expect.any(Number) }) })
+            ])
+          })
+        ])
+      }))
+    })
+
+    it('Tasks without eligibleAt treated as immediately eligible', async () => {
+      mockToArray = vi.fn().mockResolvedValue([
+        {
+          _id: '1',
+          title: 'Task without eligibleAt',
+          difficulty: 5,
+          impact: 8,
+          time: 5,
+          urgency: 5,
+          score: 10.5,
+          scoreVersion: 1,
+          userId: 'user-123',
+          status: 'NOT_STARTED'
+        },
+        {
+          _id: '2',
+          title: 'Task with eligibleAt',
+          difficulty: 3,
+          impact: 8,
+          time: 2,
+          urgency: 9,
+          score: 12.3,
+          scoreVersion: 1,
+          userId: 'user-123',
+          status: 'NOT_STARTED',
+          eligibleAt: Date.now() - 1000
+        }
+      ])
+      mockSort = vi.fn().mockReturnValue({ toArray: mockToArray })
+      mockFind = vi.fn().mockReturnValue({ sort: mockSort })
+      mockCollection = vi.fn().mockReturnValue({ find: mockFind, bulkWrite: vi.fn().mockResolvedValue({ modifiedCount: 0 }) })
+      mockDb = vi.fn().mockReturnValue({ collection: mockCollection })
+      mockClient = { db: mockDb }
+
+      const MongoClientMock = mongodb.MongoClient as any
+      MongoClientMock.connect = vi.fn().mockResolvedValue(mockClient)
+
+      const request = new Request('http://localhost/', {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer dummy-token-user-123' }
+      })
+
+      const result = await handler(request, {} as any)
+      const body = await result.json()
+
+      // Both tasks should be included
+      expect(Array.isArray(body)).toBe(true)
+      expect(body.length).toBe(2)
     })
   })
 })

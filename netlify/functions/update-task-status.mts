@@ -3,6 +3,7 @@ import { Db, MongoClient, ObjectId } from 'mongodb'
 import { MONGODB_DB_NAME, MONGODB_TASK_COLLECTION_NAME } from '../../consts'
 import { TASK_STATUS, isValidStatus } from '../../consts-status'
 import { validateToken } from '../utils/auth'
+import { buildCloneDocument } from '../utils/repeat'
 
 let cachedDb: Db
 
@@ -109,7 +110,8 @@ export default async (req: Request, context: Context) => {
     }
     
     // Update the task - ensure it belongs to the user
-    const result = await collection.findOneAndUpdate(
+    // Use 'before' to get the pre-update document so we can check previous status
+    const beforeDoc = await collection.findOneAndUpdate(
       { _id: objectId, userId: userId },
       {
         $set: {
@@ -117,10 +119,10 @@ export default async (req: Request, context: Context) => {
           statusChanged: Date.now()
         }
       },
-      { returnDocument: 'after' }
+      { returnDocument: 'before' }
     )
 
-    if (!result) {
+    if (!beforeDoc) {
       console.log(`Task not found: taskId=${taskId}, userId=${userId}`)
       return new Response(JSON.stringify({ error: "Task not found or unauthorized" }), {
         status: 404,
@@ -131,7 +133,57 @@ export default async (req: Request, context: Context) => {
       })
     }
 
-    return new Response(JSON.stringify(result), {
+    // Construct the updated task to return to client
+    const statusChangedTimestamp = Date.now()
+    const updatedTask = {
+      ...beforeDoc,
+      status: newStatus,
+      statusChanged: statusChangedTimestamp
+    }
+
+    // Clone-on-completion logic
+    // Only create a clone if:
+    // 1. The task has repeatOnComplete set to true
+    // 2. The new status is COMPLETED
+    // 3. The previous status was NOT already COMPLETED (prevent duplicate clones)
+    const shouldClone = 
+      beforeDoc.repeatOnComplete === true &&
+      newStatus === TASK_STATUS.COMPLETED &&
+      beforeDoc.status !== TASK_STATUS.COMPLETED
+
+    if (shouldClone) {
+      try {
+        const cloneDoc = buildCloneDocument(beforeDoc, Date.now())
+        await collection.insertOne(cloneDoc)
+      } catch (cloneError) {
+        console.error('Failed to insert clone, attempting rollback', cloneError)
+        
+        // Attempt to rollback the original task's status
+        try {
+          await collection.findOneAndUpdate(
+            { _id: objectId, userId: userId },
+            {
+              $set: {
+                status: beforeDoc.status,
+                statusChanged: beforeDoc.statusChanged
+              }
+            }
+          )
+        } catch (rollbackError) {
+          console.error('Rollback also failed', rollbackError)
+        }
+
+        return new Response(JSON.stringify({ error: "Failed to create recurring task clone" }), {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          }
+        })
+      }
+    }
+
+    return new Response(JSON.stringify(updatedTask), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',

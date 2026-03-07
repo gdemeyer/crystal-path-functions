@@ -118,7 +118,11 @@ export default async (req: Request, context: Context) => {
         // No view param: return flat array of uncompleted tasks (backward-compatible)
         const tasks = await collection.find({ 
           userId: userId,
-          status: { $ne: TASK_STATUS.COMPLETED }
+          status: { $ne: TASK_STATUS.COMPLETED },
+          $or: [
+            { eligibleAt: { $exists: false } },
+            { eligibleAt: { $lte: Date.now() } }
+          ]
         }).sort({ score: -1 }).toArray() as Task[];
 
         const rescored = await rescoreStaleTasksInPlace(tasks, collection);
@@ -151,14 +155,24 @@ export default async (req: Request, context: Context) => {
         // Optimized MongoDB query: active tasks + completed-today tasks
         const tasks = await collection.find({
           userId: userId,
-          $or: [
-            { status: { $ne: TASK_STATUS.COMPLETED } },
+          $and: [
             {
-              status: TASK_STATUS.COMPLETED,
-              statusChanged: {
-                $gte: startOfDayMs,
-                $lt: startOfNextDayMs
-              }
+              $or: [
+                { status: { $ne: TASK_STATUS.COMPLETED } },
+                {
+                  status: TASK_STATUS.COMPLETED,
+                  statusChanged: {
+                    $gte: startOfDayMs,
+                    $lt: startOfNextDayMs
+                  }
+                }
+              ]
+            },
+            {
+              $or: [
+                { eligibleAt: { $exists: false } },
+                { eligibleAt: { $lte: startOfNextDayMs } }
+              ]
             }
           ]
         }).sort({ score: -1 }).toArray() as Task[];

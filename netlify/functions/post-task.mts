@@ -89,7 +89,12 @@ export default async (req: Request, context: Context) => {
   const { _id, ...taskData } = taskToInsert
 
   const taskWithScore = {
-    ...taskData,
+    title: taskData.title,
+    difficulty: taskData.difficulty,
+    impact: taskData.impact,
+    time: taskData.time,
+    urgency: taskData.urgency,
+    ...(taskData.repeatOnComplete === true && { repeatOnComplete: true }),
     score: calculateScore(taskToInsert),
     scoreVersion: SCORE_VERSION,
     userId: userId,
