@@ -1,6 +1,6 @@
 import { verifyToken } from './jwt';
 
-let googleClient: any;
+let googleClient: { verifyIdToken: (options: { idToken: string; audience: string }) => Promise<unknown> } | undefined;
 
 // Lazy initialization to handle test mocking
 async function getGoogleClient() {

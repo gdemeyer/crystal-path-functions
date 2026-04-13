@@ -126,6 +126,39 @@ describe('edit-task endpoint', () => {
     expect(response.status).toBe(400)
   })
 
+  it('returns 400 when numeric fields are outside Fibonacci set', async () => {
+    const { validateToken } = await import('../../netlify/utils/auth')
+    vi.mocked(validateToken).mockResolvedValueOnce('user-123')
+
+    const req = new Request('http://localhost/.netlify/functions/edit-task', {
+      method: 'PUT',
+      headers: { 'Authorization': 'Bearer dummy-token' },
+      body: JSON.stringify({ taskId: '507f1f77bcf86cd799439011', title: 'Test', difficulty: 4, impact: 1, time: 1, urgency: 1 }),
+    })
+
+    const response = await handler(req, {} as never)
+    expect(response.status).toBe(400)
+    const body = await response.json()
+    expect(body.error).toContain('Numeric fields must be one of')
+  })
+
+  it('returns 400 when title exceeds maximum length', async () => {
+    const { validateToken } = await import('../../netlify/utils/auth')
+    vi.mocked(validateToken).mockResolvedValueOnce('user-123')
+
+    const longTitle = 'a'.repeat(501)
+    const req = new Request('http://localhost/.netlify/functions/edit-task', {
+      method: 'PUT',
+      headers: { 'Authorization': 'Bearer dummy-token' },
+      body: JSON.stringify({ taskId: '507f1f77bcf86cd799439011', title: longTitle, difficulty: 1, impact: 1, time: 1, urgency: 1 }),
+    })
+
+    const response = await handler(req, {} as never)
+    expect(response.status).toBe(400)
+    const body = await response.json()
+    expect(body.error).toContain('maximum length')
+  })
+
   it('returns 400 when taskId has invalid ObjectId format', async () => {
     const { validateToken } = await import('../../netlify/utils/auth')
     vi.mocked(validateToken).mockResolvedValueOnce('user-123')

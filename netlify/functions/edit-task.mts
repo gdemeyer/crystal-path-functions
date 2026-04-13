@@ -82,9 +82,32 @@ export default async (req: Request, context: Context) => {
     })
   }
 
-  // Validate title is not empty
+  // Validate numeric fields are within allowed Fibonacci set
+  const VALID_VALUES = new Set([1, 2, 3, 5, 8, 13])
+  if (![taskData.difficulty, taskData.impact, taskData.time, taskData.urgency]
+    .every(v => VALID_VALUES.has(v))) {
+    return new Response(JSON.stringify({ error: "Numeric fields must be one of [1, 2, 3, 5, 8, 13]" }), {
+      status: 400,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      }
+    })
+  }
+
+  // Validate title is not empty and not too long
   if (!taskData.title || taskData.title.trim().length === 0) {
     return new Response(JSON.stringify({ error: "Task title cannot be empty" }), {
+      status: 400,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      }
+    })
+  }
+
+  if (taskData.title.trim().length > 500) {
+    return new Response(JSON.stringify({ error: "Task title exceeds maximum length of 500 characters" }), {
       status: 400,
       headers: {
         'Content-Type': 'application/json',
@@ -157,7 +180,7 @@ export default async (req: Request, context: Context) => {
       }
     })
   } catch (error) {
-    console.log(error)
+    console.error(error)
     return new Response(JSON.stringify({ error: "Server error" }), {
       status: 500,
       headers: {
