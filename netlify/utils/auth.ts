@@ -138,12 +138,10 @@ export async function validateSessionToken(authorizationHeader?: string): Promis
     const token = match[1];
 
     // Demo mode: Accept dummy tokens directly (skip JWT verification for simple tokens)
-    if (process.env.DEMO_MODE === 'true') {
-        if (token.startsWith('dummy-token-')) {
-            const userId = token.replace('dummy-token-', '');
-            if (userId) {
-                return userId;
-            }
+    if (process.env.DEMO_MODE === 'true' && token.startsWith('dummy-token-')) {
+        const userId = token.replace('dummy-token-', '');
+        if (userId) {
+            return userId;
         }
         throw new Error('Invalid demo token format');
     }

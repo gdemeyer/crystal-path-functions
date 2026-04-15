@@ -38,7 +38,7 @@ describe('Token Validation Utils', () => {
 
         it('should reject demo token with invalid format', async () => {
             const token = 'Bearer invalid-token';
-            await expect(validateToken(token)).rejects.toThrow('Invalid demo token format');
+            await expect(validateToken(token)).rejects.toThrow('Token verification failed');
         });
 
         it('should reject missing Authorization header', async () => {
