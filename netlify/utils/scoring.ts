@@ -5,7 +5,7 @@ import { Task } from '../types'
  * Tasks stored with an older version will be automatically rescored
  * the next time they are fetched.
  */
-export const SCORE_VERSION = 2
+export const SCORE_VERSION = 3
 
 /**
  * Calculate the priority score for a task.
@@ -16,12 +16,16 @@ export const SCORE_VERSION = 2
  * - Higher impact (with 1.2x multiplier)
  * - Lower time required (21 - time)
  * - Higher urgency (with 1.2x multiplier)
+ *
+ * Repeating task clones (tasks with repeatingOriginId set) receive a 5%
+ * score reduction so that equivalent non-repeating tasks rank above them.
  */
 export function calculateScore(task: Task): number {
-  return Math.sqrt(
+  const base = Math.sqrt(
     Math.pow(21 - task.difficulty, 2) +
     Math.pow(task.impact, 2) * 1.2 +
     Math.pow(21 - task.time, 2) +
     Math.pow(task.urgency, 2) * 1.5
   )
+  return task.repeatingOriginId ? base * 0.95 : base
 }

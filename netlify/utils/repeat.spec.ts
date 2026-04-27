@@ -1,7 +1,7 @@
 import { getDelayDaysForUrgency, buildCloneDocument } from './repeat'
 import { Task } from '../types'
 import { TASK_STATUS } from '../../consts-status'
-import { SCORE_VERSION } from './scoring'
+import { SCORE_VERSION, calculateScore } from './scoring'
 
 describe('getDelayDaysForUrgency', () => {
   it('returns 1 for urgency 13 (Immediately)', () => {
@@ -112,13 +112,15 @@ describe('buildCloneDocument', () => {
     expect(clone.eligibleAt).toBe(expectedEligibleAt)
   })
 
-  it('sets score via calculateScore()', () => {
+  it('sets score via calculateScore() with 5% penalty applied', () => {
     const nowMs = Date.now()
     const clone = buildCloneDocument(baseTask, nowMs)
 
+    const expectedScore = calculateScore({ ...baseTask, repeatingOriginId: baseTask._id }) * 1 // penalty already in calculateScore
     expect(clone.score).toBeDefined()
     expect(typeof clone.score).toBe('number')
     expect(clone.score).toBeGreaterThan(0)
+    expect(clone.score).toBeCloseTo(expectedScore, 5)
   })
 
   it('sets scoreVersion to current SCORE_VERSION', () => {

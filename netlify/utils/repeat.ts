@@ -38,6 +38,12 @@ export function buildCloneDocument(originalTask: Task, nowMs: number): any {
   const delayDays = getDelayDaysForUrgency(originalTask.urgency)
   const eligibleAt = nowMs + delayDays * 86400000
 
+  // Score the clone with repeatingOriginId set so the 5% penalty is applied
+  const cloneForScoring: Task = {
+    ...originalTask,
+    repeatingOriginId: originalTask._id,
+  }
+
   const clone: any = {
     title: originalTask.title,
     difficulty: originalTask.difficulty,
@@ -48,7 +54,7 @@ export function buildCloneDocument(originalTask: Task, nowMs: number): any {
     status: TASK_STATUS.NOT_STARTED,
     repeatingOriginId: originalTask._id,
     eligibleAt: eligibleAt,
-    score: calculateScore(originalTask),
+    score: calculateScore(cloneForScoring),
     scoreVersion: SCORE_VERSION,
   }
 

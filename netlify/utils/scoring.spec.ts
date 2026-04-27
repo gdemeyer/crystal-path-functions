@@ -82,4 +82,36 @@ describe('scoring utility', () => {
 
     expect(quickScore).toBeGreaterThan(slowScore)
   })
+
+  it('applies 5% score penalty when repeatingOriginId is set', () => {
+    const task: Task = {
+      title: 'Task',
+      difficulty: 5,
+      impact: 8,
+      time: 3,
+      urgency: 13,
+    }
+    const baseScore = calculateScore(task)
+    const cloneScore = calculateScore({ ...task, repeatingOriginId: 'origin-123' })
+
+    expect(cloneScore).toBeCloseTo(baseScore * 0.95, 5)
+    expect(cloneScore).toBeLessThan(baseScore)
+  })
+
+  it('does not penalise tasks without repeatingOriginId', () => {
+    const task: Task = {
+      title: 'Task',
+      difficulty: 5,
+      impact: 8,
+      time: 3,
+      urgency: 13,
+    }
+    const expected = Math.sqrt(
+      Math.pow(21 - 5, 2) +
+      Math.pow(8, 2) * 1.2 +
+      Math.pow(21 - 3, 2) +
+      Math.pow(13, 2) * 1.5
+    )
+    expect(calculateScore(task)).toBeCloseTo(expected, 5)
+  })
 })
