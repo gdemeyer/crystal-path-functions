@@ -12,20 +12,20 @@ describe('getDelayDaysForUrgency', () => {
     expect(getDelayDaysForUrgency(8)).toBe(1)
   })
 
-  it('returns 1 for urgency 5 (Tomorrow)', () => {
-    expect(getDelayDaysForUrgency(5)).toBe(1)
+  it('returns 2 for urgency 5 (Tomorrow)', () => {
+    expect(getDelayDaysForUrgency(5)).toBe(2)
   })
 
-  it('returns 3 for urgency 3 (This Week)', () => {
-    expect(getDelayDaysForUrgency(3)).toBe(3)
+  it('returns 7 for urgency 3 (This Week)', () => {
+    expect(getDelayDaysForUrgency(3)).toBe(7)
   })
 
-  it('returns 7 for urgency 2 (This Month)', () => {
-    expect(getDelayDaysForUrgency(2)).toBe(7)
+  it('returns 30 for urgency 2 (This Month)', () => {
+    expect(getDelayDaysForUrgency(2)).toBe(30)
   })
 
-  it('returns 14 for urgency 1 (Eventually)', () => {
-    expect(getDelayDaysForUrgency(1)).toBe(14)
+  it('returns 90 for urgency 1 (Eventually)', () => {
+    expect(getDelayDaysForUrgency(1)).toBe(90)
   })
 
   it('returns 14 for unknown urgency value (fallback)', () => {
@@ -100,7 +100,7 @@ describe('buildCloneDocument', () => {
     const nowMs = 1700000000000
     const clone = buildCloneDocument({ ...baseTask, urgency: 3 }, nowMs)
 
-    const expectedEligibleAt = nowMs + 3 * 86400000
+    const expectedEligibleAt = nowMs + 7 * 86400000
     expect(clone.eligibleAt).toBe(expectedEligibleAt)
   })
 

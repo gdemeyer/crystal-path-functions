@@ -5,15 +5,16 @@ import { calculateScore, SCORE_VERSION } from './scoring'
 /**
  * Urgency value to delay days mapping.
  * Based on Fibonacci values from the urgency slider.
- * Unknown values default to 14 days (safest/longest).
+ * Delays match the cadence implied by each urgency label.
+ * Unknown values default to 14 days.
  */
 const URGENCY_TO_DELAY_DAYS: Record<number, number> = {
-  1: 14,   // Eventually
-  2: 7,    // This Month
-  3: 3,    // This Week
-  5: 1,    // Tomorrow
-  8: 1,    // Today
-  13: 1,   // Immediately
+  1: 90,   // Eventually  (~quarterly)
+  2: 30,   // This Month  (~monthly)
+  3: 7,    // This Week   (~weekly)
+  5: 2,    // Tomorrow    (~bi-daily)
+  8: 1,    // Today       (~daily)
+  13: 1,   // Immediately (~daily)
 }
 
 /**

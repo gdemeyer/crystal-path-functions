@@ -461,7 +461,7 @@ describe('update-task-status endpoint', () => {
   })
 
   describe('Repeat on completion - Eligibility mapping', () => {
-    it('Urgency 1 → eligibleAt is +14 days', async () => {
+    it('Urgency 1 → eligibleAt is +90 days', async () => {
       const originalTask = {
         _id: '507f1f77bcf86cd799439011',
         title: 'Test Task',
@@ -489,13 +489,13 @@ describe('update-task-status endpoint', () => {
       await handler(req, {} as any)
 
       const cloneDoc = mockInsertOne.mock.calls[0][0]
-      const expectedMin = nowBefore + 14 * 86400000
-      const expectedMax = Date.now() + 14 * 86400000
+      const expectedMin = nowBefore + 90 * 86400000
+      const expectedMax = Date.now() + 90 * 86400000
       expect(cloneDoc.eligibleAt).toBeGreaterThanOrEqual(expectedMin)
       expect(cloneDoc.eligibleAt).toBeLessThanOrEqual(expectedMax)
     })
 
-    it('Urgency 3 → eligibleAt is +3 days', async () => {
+    it('Urgency 3 → eligibleAt is +7 days', async () => {
       const originalTask = {
         _id: '507f1f77bcf86cd799439011',
         title: 'Test Task',
@@ -523,8 +523,8 @@ describe('update-task-status endpoint', () => {
       await handler(req, {} as any)
 
       const cloneDoc = mockInsertOne.mock.calls[0][0]
-      const expectedMin = nowBefore + 3 * 86400000
-      const expectedMax = Date.now() + 3 * 86400000
+      const expectedMin = nowBefore + 7 * 86400000
+      const expectedMax = Date.now() + 7 * 86400000
       expect(cloneDoc.eligibleAt).toBeGreaterThanOrEqual(expectedMin)
       expect(cloneDoc.eligibleAt).toBeLessThanOrEqual(expectedMax)
     })
