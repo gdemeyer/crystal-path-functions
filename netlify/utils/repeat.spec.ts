@@ -1,7 +1,7 @@
 import { getDelayDaysForUrgency, buildCloneDocument } from './repeat'
 import { Task } from '../types'
 import { TASK_STATUS } from '../../consts-status'
-import { SCORE_VERSION, calculateScore } from './scoring'
+import { SCORE_VERSION } from './scoring'
 
 describe('getDelayDaysForUrgency', () => {
   it('returns 1 for urgency 13 (Immediately)', () => {
@@ -116,10 +116,14 @@ describe('buildCloneDocument', () => {
     const nowMs = Date.now()
     const clone = buildCloneDocument(baseTask, nowMs)
 
-    const expectedScore = calculateScore({ ...baseTask, repeatingOriginId: baseTask._id }) * 1 // penalty already in calculateScore
-    expect(clone.score).toBeDefined()
-    expect(typeof clone.score).toBe('number')
-    expect(clone.score).toBeGreaterThan(0)
+    // Compute inline to avoid false confidence from a potentially broken calculateScore
+    const baseScore = Math.sqrt(
+      Math.pow(21 - baseTask.difficulty, 2) +
+      Math.pow(baseTask.impact, 2) * 1.2 +
+      Math.pow(21 - baseTask.time, 2) +
+      Math.pow(baseTask.urgency, 2) * 1.5
+    )
+    const expectedScore = baseScore * 0.95
     expect(clone.score).toBeCloseTo(expectedScore, 5)
   })
 
@@ -128,5 +132,10 @@ describe('buildCloneDocument', () => {
     const clone = buildCloneDocument(baseTask, nowMs)
 
     expect(clone.scoreVersion).toBe(SCORE_VERSION)
+  })
+
+  it('throws when originalTask has no _id', () => {
+    const taskWithoutId: Task = { ...baseTask, _id: undefined }
+    expect(() => buildCloneDocument(taskWithoutId, Date.now())).toThrow('Cannot clone a task without an _id')
   })
 })

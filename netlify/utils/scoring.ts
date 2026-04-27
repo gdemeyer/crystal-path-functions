@@ -27,5 +27,5 @@ export function calculateScore(task: Task): number {
     Math.pow(21 - task.time, 2) +
     Math.pow(task.urgency, 2) * 1.5
   )
-  return task.repeatingOriginId ? base * 0.95 : base
+  return task.repeatingOriginId != null ? base * 0.95 : base
 }

@@ -35,6 +35,8 @@ export function getDelayDaysForUrgency(urgency: number): number {
  * @returns A new task document (clone) ready for insertion
  */
 export function buildCloneDocument(originalTask: Task, nowMs: number): any {
+  if (!originalTask._id) throw new Error('Cannot clone a task without an _id')
+
   const delayDays = getDelayDaysForUrgency(originalTask.urgency)
   const eligibleAt = nowMs + delayDays * 86400000
 

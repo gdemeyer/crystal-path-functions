@@ -9,6 +9,10 @@ describe('SCORE_VERSION', () => {
     expect(Number.isInteger((scoring as any).SCORE_VERSION)).toBe(true)
     expect((scoring as any).SCORE_VERSION).toBeGreaterThan(0)
   })
+
+  it('is pinned to version 3', () => {
+    expect(scoring.SCORE_VERSION).toBe(3)
+  })
 })
 
 describe('scoring utility', () => {

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import handler from '../../netlify/functions/update-task-status.mts'
 import * as mongodb from 'mongodb'
 import { TASK_STATUS } from '../../consts-status'
+import { calculateScore, SCORE_VERSION } from '../../netlify/utils/scoring'
 
 vi.mock('mongodb')
 vi.mock('../../netlify/utils/auth', () => ({
@@ -330,8 +331,10 @@ describe('update-task-status endpoint', () => {
       expect(cloneDoc.score).toBeDefined()
       expect(typeof cloneDoc.score).toBe('number')
       expect(cloneDoc.score).toBeGreaterThan(0)
-      expect(cloneDoc.scoreVersion).toBeDefined()
-      expect(typeof cloneDoc.scoreVersion).toBe('number')
+      // Penalty must be applied: clone score equals penalised calculateScore result
+      const expectedScore = calculateScore({ ...originalTask, repeatingOriginId: originalTask._id })
+      expect(cloneDoc.score).toBeCloseTo(expectedScore, 5)
+      expect(cloneDoc.scoreVersion).toBe(SCORE_VERSION)
     })
 
     it('Inserted clone copies title, urgency, impact, time, difficulty', async () => {
